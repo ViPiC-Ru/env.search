@@ -20,6 +20,7 @@ cscript env.search.min.js <mode> <container> [<option>...] [<input>...] \\ [<act
     - **check** - Флаг проверки доступности целевых компьютеров.
     - **user** - Флаг запроса информации по пользователю (только для режима `ldap`).
     - **noalign** - Флаг запрета выравнивания выборок и списков.
+    - **nowait**  - Флаг выполнения действия без ожидания (только при отсутствии `service`).
     - **color** - Флаг использования цветового оформления.
 - `<input>` - Шаблоны для получения данных из атрибутов объекта (только для режима `ldap`).
 - `<action>` - Действия в формате ключ и команда (доступны переменные `%ENV%`).
@@ -63,7 +64,7 @@ cscript env.search.min.js <mode> <container> [<option>...] [<input>...] \\ [<act
 - `TMP-VALUE` - Значение элемента в списке.
 
 # Примеры использования
-Вывести предложение для ввода поискового **запроса**, номера **компьютера** и выбора последующего **действия**. Поиск осуществлять в `Active Directory` в приделах `Organizational Unit` c **guid** `{ABCD1234-111B-14DC-ABAC-4578F1145541}`. Для отображаемой информации использовать оформление цветом, найденные компьютеры проверять на доступность и запрашивать информацию о пользователе. Что бы узнать **guid** контейнера в `Active Directory` можно воспользоваться программой [Active Directory Explorer](https://docs.microsoft.com/ru-ru/sysinternals/downloads/adexplorer).
+Вывести предложение для ввода поискового **запроса**, номера **компьютера** и выбора последующего **действия**. Поиск осуществлять в `Active Directory` в пределах `Organizational Unit` c **guid** `{ABCD1234-111B-14DC-ABAC-4578F1145541}`. Для отображаемой информации использовать оформление цветом, найденные компьютеры проверять на доступность и запрашивать информацию о пользователе. Что бы узнать **guid** контейнера в `Active Directory` можно воспользоваться программой [Active Directory Explorer](https://docs.microsoft.com/ru-ru/sysinternals/downloads/adexplorer).
 ```bat
 cscript env.search.min.js ldap {0C9E6295-C543-40D1-BD6D-3F2BDF54F7A9} color check user item=" %TMP-INDEX% | %TMP-CHECK% | %NET-HOST% | %USR-NAME% | %USR-MOBILE% | %USR-INFO% | %DEV-NAME%" unit=" %TMP-INDEX% | %TMP-KEY% | %TMP-VALUE%" description="%USR-NAME-THIRD% | %USR-NAME-FIRST% %USR-NAME-SECOND% | %DEV-NAME% | %PCB-BIOS-SERIAL% | %PCB-BIOS-RELEASE-DATE% | %NET-MAC% | %DEV-BENCHMARK% | %DEV-DESCRIPTION%" \\ Помощник="msra.exe /offerRA %NET-HOST%" Подключится="mstsc.exe /v:%NET-HOST%" Доступность="ping.exe %NET-HOST%" Разбудить="wolcmd.exe %NET-MAC% 192.168.0.255 255.255.255.0" Сведения="msinfo32.exe /computer %NET-HOST%" Управление="compmgmt.msc /computer=%NET-HOST%"
 ```
@@ -71,11 +72,11 @@ cscript env.search.min.js ldap {0C9E6295-C543-40D1-BD6D-3F2BDF54F7A9} color chec
 ```bat
 cscript env.search.min.js folder "C:\Inventory" color item=" %TMP-INDEX% | %NET-HOST% | %USR-NAME% | %DEV-DESCRIPTION%" unit=" %TMP-INDEX% | %TMP-KEY% | %TMP-VALUE%" \\ Помощник="msra.exe /offerRA %NET-HOST%" Подключится="mstsc.exe /v:%NET-HOST%" Доступность="ping.exe %NET-HOST%" Разбудить="wolcmd.exe %NET-MAC% 192.168.0.255 255.255.255.0" Сведения="msinfo32.exe /computer %NET-HOST%" Управление="compmgmt.msc /computer=%NET-HOST%"
 ```
-Сохранить в файл список всех компьютеров расположенных в `Active Directory` в приделах `Organizational Unit` c **guid** `{ABCD1234-111B-14DC-ABAC-4578F1145541}`.
+Сохранить в файл список всех компьютеров расположенных в `Active Directory` в пределах `Organizational Unit` c **guid** `{ABCD1234-111B-14DC-ABAC-4578F1145541}`.
 ```bat
 cscript /nologo search.min.js ldap {ABCD1234-111B-14DC-ABAC-4578F1145541} search="" noalign > list.txt
 ```
-Подключиться через **TightVNC** к первому найденному компьютеру по поисковому запросу `Иванов`. Поиск осуществлять в `Active Directory` в приделах `Organizational Unit` c **guid** `{ABCD1234-111B-14DC-ABAC-4578F1145541}`. Перед подключением на удалённом компьютере запустить службу с именем `tvnserver`, а после отключения остановить её.
+Подключиться через **TightVNC** к первому найденному компьютеру по поисковому запросу `Иванов`. Поиск осуществлять в `Active Directory` в пределах `Organizational Unit` c **guid** `{ABCD1234-111B-14DC-ABAC-4578F1145541}`. Перед подключением на удалённом компьютере запустить службу с именем `tvnserver`, а после отключения остановить её.
 ```bat
 wscript env.search.min.js ldap {0C9E6295-C543-40D1-BD6D-3F2BDF54F7A9} service=tvnserver search="Иванов" index=1 action=TightVNC \\ TightVNC="tvnviewer.exe -host=%NET-HOST%"
 ```
