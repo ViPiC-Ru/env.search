@@ -1,6 +1,6 @@
-/* 1.1.1 ищет данне для переменных среды
+/* 1.2.0 ищет данне для переменных среды
 
-cscript env.search.min.js <mode> <container> [<option>...] [<input>...] \\ [<action>...]
+cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 
 <mode>      - Режим поиска данных для переменных среды.
     folder  - Получение данных из папки с ini файлами.
@@ -222,32 +222,18 @@ var search = new App({
         },
         init: function () {// функция инициализации приложения
             var key, value, index, length, list, mode, container, fso, shell, isDelim, file,
-                files, path, items, item, units, data, locator, local, remote, response, computers,
-                users, service, command, count, config = {}, input = {}, action = {},
+                files, path, units, data, locator, local, remote, response, computers, users, count,
+                service, command, item, items = [], config = {}, input = {}, action = {},
                 isFirstLine = true, error = 0;
 
             shell = new ActiveXObject("WScript.Shell");
             fso = new ActiveXObject("Scripting.FileSystemObject");
             locator = new ActiveXObject("wbemScripting.Swbemlocator");
             locator.security_.impersonationLevel = 3;// Impersonate
-            // получаем основные параметры
+            // получаем параметры
             if (!error) {// если нет ошибок
                 length = wsh.arguments.length;// получаем длину
-                for (index = 0; index < Math.min(length, 2); index++) {
-                    value = wsh.arguments.item(index);// получаем значение
-                    switch (index) {// поддерживаемые параметры
-                        case 0:// режим работы
-                            mode = value.toLowerCase();
-                            break;
-                        case 1:// контейнер
-                            container = value;
-                            break;
-                    };
-                };
-            };
-            // получаем параметры конфигурации
-            if (!error) {// если нет ошибок
-                for (; index < length; index++) {// пробигаемся по параметрам
+                for (index = 0; index < length; index++) {// пробигаемся по параметрам
                     value = wsh.arguments.item(index);// получаем очередное значение
                     // запуск службы на удалённом хосте
                     if (!("service" in config)) {// если нет в конфигурации
@@ -351,6 +337,20 @@ var search = new App({
                             continue;// переходим к следующему параметру
                         };
                     };
+                    // режим поиска данных
+                    if (0 == index && !mode) {// если нужно выполнить
+                        if (app.val.putDelim != value) {// если не разделитель потоков
+                            mode = value.toLowerCase();// присваиваем значение
+                            continue;// переходим к следующему параметру
+                        };
+                    };
+                    // контейнер для поиска данных
+                    if (1 == index && !container && mode) {// если нужно выполнить
+                        if (app.val.putDelim != value) {// если не разделитель потоков
+                            container = value;// присваиваем значение
+                            continue;// переходим к следующему параметру
+                        };
+                    };
                     // если закончились параметры конфигурации
                     break;// остававливаем получние параметров
                 };
@@ -391,7 +391,7 @@ var search = new App({
                 };
             };
             // получаем поисковой запрос от пользователя
-            if (!error) {// если нет ошибок
+            if (!error && mode) {// если нужно выполнить
                 if (!("search" in config)) {// если нет в конфигурации
                     try {// пробуем получить данные
                         wsh.stdOut.write("Введите поисковой запрос: ");
@@ -409,7 +409,7 @@ var search = new App({
                     };
                 };
             };
-            // работаем в зависимости от режима
+            // выполняем поиск в указанном режиме
             switch (mode) {// поддерживаемые режимы
                 case "folder":// папка с файлами
                     // проверяем обязательные параметры
@@ -437,7 +437,6 @@ var search = new App({
                     };
                     // выполняем поиск целевых объектов
                     if (!error) {// если нет ошибок
-                        items = [];// массив целевых объектов
                         files = new Enumerator(container.files);
                         while (!files.atEnd()) {// пока не достигнут конец
                             file = files.item();// получаем очередной элимент коллекции
@@ -501,7 +500,6 @@ var search = new App({
                     };
                     // выполняем получение данных по целевым объектам
                     if (!error) {// если нет ошибок
-                        items = [];// массив целевых объектов
                         length = computers.length;// получаем длину
                         for (index = 0; index < length; index++) {
                             item = computers[index];// получаем очередной объект
@@ -545,57 +543,86 @@ var search = new App({
                     };
                     break;
                 default:// не поддерживаемый режим
-                    if (!error) error = 4;
-            };
-            // работаем с проверкой доступности
-            if (config.check) {// если требуется проверка
-                // подключаемся к локальному хосту
-                if (!error) {// если нет ошибок
-                    try {// пробуем подключиться к компьютеру
-                        local = locator.connectServer("", "root\\CIMV2");
-                    } catch (e) {// если возникли ошибки
-                        error = 8;
+                    // обрабатываем не поддерживаемый режим
+                    if (!error) {// если нет ошибок
+                        if (!mode) {// если не задан режим
+                        } else error = 4;
                     };
-                };
-                // проверяем на доступность целевые объекты
-                if (!error) {// если нет ошибок
-                    length = items.length;// получаем длину
-                    for (index = 0; index < length; index++) {
-                        data = items[index];// получаем очередной объект
-                        // выполняем запрос
-                        response = local.execQuery(
-                            "SELECT responseTime, statusCode" +
-                            " FROM Win32_PingStatus" +
-                            " WHERE address = '" + data["NET-HOST"] + "'" +
-                            " AND timeout = 600"
-                        );
-                        // обрабатываем ответ
-                        response = new Enumerator(response);
-                        while (!response.atEnd()) {// пока не достигнут конец
-                            item = response.item();// получаем очередной элимент коллекции
-                            response.moveNext();// переходим к следующему элименту
-                            // работаем с элиментом
-                            if (0 == item.statusCode) data["TMP-CHECK"] = item.responseTime + " мс";
-                            // останавливаемся на первом
-                            break;
+                    // проверяем обязательные параметры
+                    if (!error) {// если нет ошибок
+                        if (// множественное условие
+                            app.fun.count(action) && config.unit
+                        ) {// если проверка пройдена
+                        } else error = 5;
+                    };
+                    // проверяем запрещённые параметры
+                    if (!error) {// если нет ошибок
+                        if (// множественное условие
+                            !app.fun.count(input)
+                            && !("search" in config)
+                            && !("index" in config)
+                            && !config.service
+                            && !config.check
+                            && !config.user
+                        ) {// если проверка пройдена
+                        } else error = 6;
+                    };
+            };
+            // проверяем список целевых объектов
+            if (!error && mode) {// если нужно выполнить
+                if (items.length) {// если список не пуст
+                } else error = 8;
+            };
+            // работаем в зависимости от наличия целевых объектов
+            if (items.length) {// если список целевых объектов не пуст
+                // работаем с проверкой доступности
+                if (config.check) {// если требуется проверка
+                    // подключаемся к локальному хосту
+                    if (!error) {// если нет ошибок
+                        try {// пробуем подключиться к компьютеру
+                            local = locator.connectServer("", "root\\CIMV2");
+                        } catch (e) {// если возникли ошибки
+                            error = 9;
+                        };
+                    };
+                    // проверяем на доступность целевые объекты
+                    if (!error) {// если нет ошибок
+                        length = items.length;// получаем длину
+                        for (index = 0; index < length; index++) {
+                            data = items[index];// получаем очередной объект
+                            // выполняем запрос
+                            response = local.execQuery(
+                                "SELECT responseTime, statusCode" +
+                                " FROM Win32_PingStatus" +
+                                " WHERE address = '" + data["NET-HOST"] + "'" +
+                                " AND timeout = 600"
+                            );
+                            // обрабатываем ответ
+                            response = new Enumerator(response);
+                            while (!response.atEnd()) {// пока не достигнут конец
+                                item = response.item();// получаем очередной элимент коллекции
+                                response.moveNext();// переходим к следующему элименту
+                                // работаем с элиментом
+                                if (0 == item.statusCode) data["TMP-CHECK"] = item.responseTime + " мс";
+                                // останавливаемся на первом
+                                break;
+                            };
                         };
                     };
                 };
-            };
-            // выполняем подсчёт значений
-            if (!error) {// если нет ошибок
-                count = {};// сбрасываем значение
-                length = items.length;// получаем длину
-                for (index = 0; index < length; index++) {
-                    data = items[index];// получаем очередной объект
-                    data["TMP-INDEX"] = app.lib.strPad(index + 1, ("" + length).length, "0", "left");
-                    if (!config.noalign) for (var key in data) count[key] = Math.max(data[key].length, count[key] || 0);
+                // выполняем подсчёт значений
+                if (!error) {// если нет ошибок
+                    count = {};// сбрасываем значение
+                    length = items.length;// получаем длину
+                    for (index = 0; index < length; index++) {
+                        data = items[index];// получаем очередной объект
+                        data["TMP-INDEX"] = app.lib.strPad(index + 1, ("" + length).length, "0", "left");
+                        if (!config.noalign) for (var key in data) count[key] = Math.max(data[key].length, count[key] || 0);
+                    };
                 };
-            };
-            // выыодим список целевых объектов
-            if (!error) {// если нет ошибок
-                length = items.length;// получаем длину
-                if (length) {// если список объектов не пуст
+                // выыодим список целевых объектов
+                if (!error) {// если нет ошибок
+                    length = items.length;// получаем длину
                     if (!isFirstLine) wsh.stdOut.writeLine();// выводим пустую строчку
                     for (index = 0; index < length; index++) {
                         data = items[index];// получаем очередной объект
@@ -608,43 +635,47 @@ var search = new App({
                     };
                     if (app.fun.count(action)) wsh.stdOut.writeLine();// выводим пустую строчку
                     isFirstLine = true;
-                } else error = 9;
+                };
             };
             // работаем в зависимости от наличия действий
+            item = null;// сбрасываем информацию об целевом объекте
             if (app.fun.count(action)) {// если список действий не пуст
-                // получаем номер компьютера от пользователя
-                if (!error) {// если нет ошибок
-                    if (!("index" in config)) {// если нет в конфигурации
-                        try {// пробуем получить данные
-                            wsh.stdOut.write("Введите номер компьютера: ");
-                            if (config.color) wsh.stdOut.write(app.fun.color("yellow", "", true));
-                            value = wsh.stdIn.readLine();// просим ввести строку
-                            if (config.color) wsh.stdOut.write(app.fun.color("reset", "", true));
-                            value = app.wsh.iconv("cp866", "windows-1251", value);
-                            value = !isNaN(value) ? Number(value) - 1 : -1;
-                            config.index = value;
-                            isFirstLine = false;
-                        } catch (e) {// если возникли ошибки
-                            try {// пробуем выполнить
-                                wsh.stdOut.writeLine();// выводим пустую строчку
-                            } catch (e) { };// игнорируем исключения
-                            error = 10;
+                // работаем в зависимости от наличия целевых объектов
+                if (items.length) {// если список целевых объектов не пуст
+                    // получаем номер компьютера от пользователя
+                    if (!error) {// если нет ошибок
+                        if (!("index" in config)) {// если нет в конфигурации
+                            try {// пробуем получить данные
+                                wsh.stdOut.write("Введите номер компьютера: ");
+                                if (config.color) wsh.stdOut.write(app.fun.color("yellow", "", true));
+                                value = wsh.stdIn.readLine();// просим ввести строку
+                                if (config.color) wsh.stdOut.write(app.fun.color("reset", "", true));
+                                value = app.wsh.iconv("cp866", "windows-1251", value);
+                                value = !isNaN(value) ? Number(value) - 1 : -1;
+                                config.index = value;
+                                isFirstLine = false;
+                            } catch (e) {// если возникли ошибки
+                                try {// пробуем выполнить
+                                    wsh.stdOut.writeLine();// выводим пустую строчку
+                                } catch (e) { };// игнорируем исключения
+                                error = 10;
+                            };
                         };
                     };
-                };
-                // получаем целевой объект по порядковому номеру
-                if (!error) {// если нет ошибок
-                    item = items[config.index];
-                    if (item) {// если объект получен
-                    } else error = 11;
-                };
-                // добавляем переменные во временное окружение
-                if (!error) {// если нет ошибок
-                    data = item;// получаем данные
-                    items = shell.environment(app.val.envType);
-                    for (var key in data) {// пробигаемся по списку с данными
-                        value = data[key];// получаем очередное значение
-                        setEnv(items, key, value);
+                    // получаем целевой объект по порядковому номеру
+                    if (!error) {// если нет ошибок
+                        item = items[config.index];
+                        if (item) {// если объект получен
+                        } else error = 11;
+                    };
+                    // добавляем переменные во временное окружение
+                    if (!error) {// если нет ошибок
+                        data = item;// получаем данные
+                        items = shell.environment(app.val.envType);
+                        for (var key in data) {// пробигаемся по списку с данными
+                            value = data[key];// получаем очередное значение
+                            setEnv(items, key, value);
+                        };
                     };
                 };
                 // выполняем подсчёт значений
@@ -712,6 +743,7 @@ var search = new App({
             if (command) {// если есть команда для выполнения
                 // подключаемся к удалённому хосту
                 if (!error && config.service) {// если нужно выполнить
+                    data = item;// получаем данные
                     try {// пробуем подключиться к компьютеру
                         remote = locator.connectServer(data["NET-HOST"], "root\\CIMV2");
                     } catch (e) {// если возникли ошибки
@@ -757,8 +789,8 @@ var search = new App({
                     5: "Обязательные параметры не прошли проверку или отсутствуют.",
                     6: "Задана не допустимая комбинация параметров.",
                     7: "Не удалось получить контейнер для поиска данных.",
-                    8: "Не удалось подключиться к локальному компьютеру.",
-                    9: "Не удалось найти подходящие компьютеры.",
+                    8: "Не удалось найти подходящие компьютеры.",
+                    9: "Не удалось подключиться к локальному компьютеру.",
                     10: "Не удалось инициировать получение номера компьютера.",
                     11: "Отсутствует компьютер с указанным номером.",
                     12: "Не удалось инициировать получение номера действия.",

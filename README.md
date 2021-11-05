@@ -4,7 +4,7 @@
 # Использование
 В командной строке **Windows** введите следующую команду. Если необходимо скрыть отображение окна консоли, то вместо `cscript` можно использовать `wscript`.
 ```bat
-cscript env.search.min.js <mode> <container> [<option>...] [<input>...] \\ [<action>...]
+cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 ```
 - `<mode>` - Режим поиска данных для переменных среды.
     - **folder** - Получение данных из папки с `ini` файлами.
