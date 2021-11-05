@@ -1,4 +1,4 @@
-/* 1.1.0 ищет данне для переменных среды
+/* 1.1.1 ищет данне для переменных среды
 
 cscript env.search.min.js <mode> <container> [<option>...] [<input>...] \\ [<action>...]
 
@@ -600,7 +600,7 @@ var search = new App({
                     for (index = 0; index < length; index++) {
                         data = items[index];// получаем очередной объект
                         data = app.lib.clone(data);// колонируем для изменений
-                        if (!config.noalign) for (var key in count) data[key] = app.lib.strPad(data[key] || "", count[key], " ", isNaN(parseInt(data[key])) ? "right" : "left");
+                        if (!config.noalign) for (var key in count) data[key] = app.lib.strPad(data[key] || "", count[key], " ", isNaN(app.lib.trim(data[key]).charAt(0)) ? "right" : "left");
                         if (value = data["TMP-INDEX"]) data["TMP-INDEX"] = app.fun.color(config.color ? "yellow" : null, value);
                         if (value = data["NET-HOST"]) data["NET-HOST"] = app.fun.color(config.color ? "cyan" : null, value);
                         value = app.fun.setDataPattern(config.item, data, false);
@@ -670,7 +670,7 @@ var search = new App({
                     for (index = 0; index < length; index++) {
                         data = units[index];// получаем очередной объект
                         data = app.lib.clone(data);// колонируем для изменений
-                        if (!config.noalign) for (var key in count) data[key] = app.lib.strPad(data[key] || "", count[key], " ", isNaN(parseInt(data[key])) ? "right" : "left");
+                        if (!config.noalign) for (var key in count) data[key] = app.lib.strPad(data[key] || "", count[key], " ", isNaN(app.lib.trim(data[key]).charAt(0)) ? "right" : "left");
                         if (value = data["TMP-VALUE"]) data["TMP-VALUE"] = app.fun.color(config.color ? "cyan" : null, value);
                         if (value = data["TMP-INDEX"]) data["TMP-INDEX"] = app.fun.color(config.color ? "yellow" : null, value);
                         value = app.fun.setDataPattern(config.unit, data, false);
