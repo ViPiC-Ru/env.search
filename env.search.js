@@ -1,4 +1,4 @@
-/* 1.2.0 ищет данне для переменных среды
+/* 1.2.1 ищет данне для переменных среды
 
 cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 
@@ -445,17 +445,17 @@ var search = new App({
                             data = app.lib.ini2obj(value, false);
                             if (// множественное условие
                                 !config.search
-                                || app.lib.hasValue(data["NET-MAC"] || "", config.search, false)
-                                || app.lib.hasValue(data["SYS-KEY"] || "", config.search, false)
-                                || app.lib.hasValue(data["NET-HOST"] || "", config.search, false)
-                                || app.lib.hasValue(data["USR-NAME"] || "", config.search, false)
-                                || app.lib.hasValue(data["DEV-NAME"] || "", config.search, false)
-                                || app.lib.hasValue(data["NET-IP-V4"] || "", config.search, false)
-                                || app.lib.hasValue(data["SYS-VERSION"] || "", config.search, false)
-                                || app.lib.hasValue(data["USR-ACCOUNT"] || "", config.search, false)
-                                || app.lib.hasValue(data["DEV-DESCRIPTION"] || "", config.search, false)
-                                || app.lib.hasValue(data["PCB-BIOS-SERIAL"] || "", config.search, false)
-                                || app.lib.hasValue(data["USR-NAME"] || "", app.fun.translit(config.search), false)
+                                || app.lib.hasValue(data["NET-MAC"], config.search, false)
+                                || app.lib.hasValue(data["SYS-KEY"], config.search, false)
+                                || app.lib.hasValue(data["NET-HOST"], config.search, false)
+                                || app.lib.hasValue(data["USR-NAME"], config.search, false)
+                                || app.lib.hasValue(data["DEV-NAME"], config.search, false)
+                                || app.lib.hasValue(data["NET-IP-V4"], config.search, false)
+                                || app.lib.hasValue(data["SYS-VERSION"], config.search, false)
+                                || app.lib.hasValue(data["USR-LOGIN"], config.search, false)
+                                || app.lib.hasValue(data["DEV-DESCRIPTION"], config.search, false)
+                                || app.lib.hasValue(data["PCB-BIOS-SERIAL"], config.search, false)
+                                || app.lib.hasValue(data["USR-NAME"], app.fun.translit(config.search), false)
                             ) {// если найдено совпадение
                                 // добавляем объект в список
                                 if (data["NET-HOST"]) items.push(data);
@@ -531,7 +531,8 @@ var search = new App({
                                     if (value = app.fun.getItemProperty(item, "mail")) data["USR-EMAIL"] = value;
                                     if (value = app.fun.getItemProperty(item, "mobile")) data["USR-MOBILE"] = value;
                                     if (value = app.fun.getItemProperty(item, "objectSid")) data["USR-SID"] = value;
-                                    if (value = app.fun.getItemProperty(item, "sAMAccountName")) data["USR-ACCOUNT"] = value;
+                                    if (value = app.fun.getItemProperty(item, "sAMAccountName")) data["USR-LOGIN"] = value;
+                                    if (value = app.fun.getItemProperty(item, "distinguishedName")) data["USR-ACCOUNT-DN"] = value;
                                     if (value = app.fun.getItemProperty(item, "telephoneNumber")) data["USR-PHONE"] = value;
                                     if (value = app.fun.getItemProperty(item, "title")) data["USR-POSITION"] = value;
                                     if (value = app.fun.getItemProperty(item, "info")) data["USR-INFO"] = value;
