@@ -1,24 +1,25 @@
-/* 1.2.2 ищет данне для переменных среды
+/* 1.3.0 ищет данне для переменных среды
 
 cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 
 <mode>      - Режим поиска данных для переменных среды.
+    file    - Получение данных из tsv или csv файла.
     folder  - Получение данных из папки с ini файлами.
     ldap    - Получение данных из active directory.
-<container> - Путь к папки или guid (допускается пустое значение).
+<container> - Путь к файлу, папке или guid (допускается пустое значение).
 <option>    - Дополнительные опции (может быть несколько, порядок не важен).
     search  - Поисковой запрос (можно опустить, будет запрошен в процессе).
-    index   - Номер компьютера в выборке (можно опустить, будет запрошен в процессе).
+    index   - Номер объекта в выборке (можно опустить, будет запрошен в процессе).
     action  - Ключ действия (можно опустить, будет запрошен в процессе).
-    item    - Шаблон представления компьютеров в выборке (доступны переменные).
+    item    - Шаблон представления объектов в выборке (доступны переменные).
     unit    - Шаблон представления других списков (доступны переменные).
-    service - Имя службы, которую нужно запустить перед выполнением команды действия.
+    service - Имя удалённой службы, которую нужно запустить перед выполнением действия.
     check   - Флаг проверки доступности целевых компьютеров.
     user    - Флаг запроса информации по пользователю (только для режима ldap).
     noalign - Флаг запрета выравнивания выборок и списков.
     nowait  - Флаг выполнения действия без ожидания (только при отсутствии service).
     color   - Флаг использования цветового оформления.
-<input>     - Шаблоны для получения данных из свойств компьютера (только для режима ldap).
+<input>     - Шаблоны для получения данных из свойств объекта (только для режима ldap).
 <action>    - Действия в формате ключ и команда (доступны переменные).
 
 */
@@ -28,6 +29,8 @@ var search = new App({
     altWrap: "'",                                       // альтернативное обрамление аргументов
     envWrap: '%',                                       // основное обрамление переменных
     keyDelim: "=",                                      // разделитель ключа от значения
+    csvDelim: ";",                                      // разделитель значений для файла выгрузки csv
+    tsvDelim: "\t",                                     // разделитель значений для файла выгрузки tsv
     putDelim: "\\\\",                                   // разделитель потоков параметров
     envType: "Process"                                  // тип изменяемого переменного окружения
 });
@@ -122,6 +125,30 @@ var search = new App({
             },
 
             /**
+             * Проверяет свойства объекта на поисковой запрос.
+             * @param {object} data - Объект с данными для проверки.
+             * @param {string} [search] - Поисковой запрос.
+             * @returns {boolean} Соответствие объекта поисковому запросу.
+             */
+
+            checkDataProperty: function (data, search) {
+                return !!data && (
+                    !search // пустой поисковой запрос
+                    || app.lib.hasValue(data["USR-NAME"], search, false)
+                    || app.lib.hasValue(data["USR-NAME"], app.fun.translit(search), false)
+                    || app.lib.hasValue(data["NET-HOST"], search, false)
+                    || app.lib.hasValue(data["DEV-NAME"], search, false)
+                    || app.lib.hasValue(data["USR-LOGIN"], search, false)
+                    || app.lib.hasValue(data["PCB-BIOS-SERIAL"], search, false)
+                    || app.lib.hasValue(data["DEV-DESCRIPTION"], search, false)
+                    || app.lib.hasValue(data["NET-MAC"], search, false)
+                    || app.lib.hasValue(data["SYS-KEY"], search, false)
+                    || app.lib.hasValue(data["NET-IP-V4"], search, false)
+                    || app.lib.hasValue(data["SYS-VERSION"], search, false)
+                );
+            },
+
+            /**
              * Получает значение свойства ADSI объекта.
              * @param {ADSI} item - ADSI объект для получения данных.
              * @param {string} property - Свойство ADSI объекта с данными.
@@ -209,7 +236,7 @@ var search = new App({
         },
         init: function () {// функция инициализации приложения
             var key, value, index, length, list, mode, container, fso, shell, isDelim, file,
-                files, path, units, data, locator, local, remote, response, computers, users, count,
+                files, path, units, data, locator, local, remote, response, users, count, delim,
                 service, command, item, items = [], config = {}, input = {}, action = {},
                 isFirstLine = true, error = 0;
 
@@ -244,7 +271,7 @@ var search = new App({
                             continue;// переходим к следующему параметру
                         };
                     };
-                    // оформление строки с другим элиментом
+                    // оформление строки с другим элементом
                     if (!("unit" in config)) {// если нет в конфигурации
                         key = app.lib.strim(value, null, app.val.keyDelim, false, false).toLowerCase();
                         if ("unit" == key) {// если пройдена основная проверка
@@ -398,6 +425,52 @@ var search = new App({
             };
             // выполняем поиск в указанном режиме
             switch (mode) {// поддерживаемые режимы
+                case "file":// файл с данными
+                    // проверяем обязательные параметры
+                    if (!error) {// если нет ошибок
+                        if (// множественное условие
+                            (config.unit || !app.lib.count(action)) && config.item
+                        ) {// если проверка пройдена
+                        } else error = 5;
+                    };
+                    // проверяем запрещённые параметры
+                    if (!error) {// если нет ошибок
+                        if (// множественное условие
+                            (!config.nowait || config.nowait && !config.service)
+                            && !app.lib.count(input)
+                            && !config.user
+                        ) {// если проверка пройдена
+                        } else error = 6;
+                    };
+                    // получаем контейнер
+                    if (!error) {// если нет ошибок
+                        path = fso.getAbsolutePathName(container);
+                        if (fso.fileExists(path)) {// если контейнер существует
+                            container = fso.getFile(path);
+                        } else error = 7;
+                    };
+                    // получаем данные из контейнер
+                    if (!error) {// если нет ошибок
+                        value = app.wsh.getFileText(container.path);
+                        switch (true) {// поддерживаемые разделители
+                            case app.lib.hasValue(value, app.val.tsvDelim, true): delim = app.val.tsvDelim; break;
+                            case app.lib.hasValue(value, app.val.csvDelim, true): delim = app.val.csvDelim; break;
+                            default: delim = "";// не определённый разделитель
+                        };
+                        units = delim ? app.lib.tsv2arr(value, true, delim, false, true) : [];
+                    };
+                    // выполняем поиск целевых объектов
+                    if (!error) {// если нет ошибок
+                        length = units.length;// получаем длину
+                        for (index = 0; index < length; index++) {
+                            data = units[index];// получаем очередной объект
+                            if (app.fun.checkDataProperty(data, config.search)) {// если найдено совпадение
+                                // добавляем объект в список
+                                if (data["NET-HOST"]) items.push(data);
+                            };
+                        };
+                    };
+                    break;
                 case "folder":// папка с файлами
                     // проверяем обязательные параметры
                     if (!error) {// если нет ошибок
@@ -426,24 +499,15 @@ var search = new App({
                     if (!error) {// если нет ошибок
                         files = new Enumerator(container.files);
                         while (!files.atEnd()) {// пока не достигнут конец
-                            file = files.item();// получаем очередной элимент коллекции
-                            files.moveNext();// переходим к следующему элименту
+                            file = files.item();// получаем очередной элемент коллекции
+                            files.moveNext();// переходим к следующему элементу
                             value = app.wsh.getFileText(file.path);
-                            data = app.lib.ini2obj(value, false);
-                            if (// множественное условие
-                                !config.search
-                                || app.lib.hasValue(data["NET-MAC"], config.search, false)
-                                || app.lib.hasValue(data["SYS-KEY"], config.search, false)
-                                || app.lib.hasValue(data["NET-HOST"], config.search, false)
-                                || app.lib.hasValue(data["USR-NAME"], config.search, false)
-                                || app.lib.hasValue(data["DEV-NAME"], config.search, false)
-                                || app.lib.hasValue(data["NET-IP-V4"], config.search, false)
-                                || app.lib.hasValue(data["SYS-VERSION"], config.search, false)
-                                || app.lib.hasValue(data["USR-LOGIN"], config.search, false)
-                                || app.lib.hasValue(data["DEV-DESCRIPTION"], config.search, false)
-                                || app.lib.hasValue(data["PCB-BIOS-SERIAL"], config.search, false)
-                                || app.lib.hasValue(data["USR-NAME"], app.fun.translit(config.search), false)
-                            ) {// если найдено совпадение
+                            switch (true) {// поддерживаемые разделители
+                                case app.lib.hasValue(value, app.val.keyDelim, true): delim = app.val.keyDelim; break;
+                                default: delim = "";// не определённый разделитель
+                            };
+                            data = delim ? app.lib.ini2obj(value, false) : null;
+                            if (app.fun.checkDataProperty(data, config.search)) {// если найдено совпадение
                                 // добавляем объект в список
                                 if (data["NET-HOST"]) items.push(data);
                             };
@@ -472,9 +536,9 @@ var search = new App({
                         if (container) {// если контейнер существует
                         } else error = 7;
                     };
-                    // выполняем поиск компьютеров
+                    // выполняем поиск объектов
                     if (!error) {// если нет ошибок
-                        computers = app.wsh.getLDAP(
+                        units = app.wsh.getLDAP(
                             "WHERE objectClass = 'Computer'" +
                             (config.search ? " AND (" +
                                 "name = '*" + config.search + "*'" +
@@ -487,11 +551,11 @@ var search = new App({
                     };
                     // выполняем получение данных по целевым объектам
                     if (!error) {// если нет ошибок
-                        length = computers.length;// получаем длину
+                        length = units.length;// получаем длину
                         for (index = 0; index < length; index++) {
-                            item = computers[index];// получаем очередной объект
+                            item = units[index];// получаем очередной объект
                             data = {};// сбрасываем значение
-                            // работаем с компьютером
+                            // работаем с объектом
                             if (value = app.fun.getItemProperty(item, "cn")) data["NET-HOST"] = value;
                             if (value = app.fun.getItemProperty(item, "distinguishedName")) data["NET-HOST-DN"] = value;
                             if (value = app.fun.getItemProperty(item, "operatingSystem")) data["SYS-NAME"] = value;
@@ -588,9 +652,9 @@ var search = new App({
                             // обрабатываем ответ
                             response = new Enumerator(response);
                             while (!response.atEnd()) {// пока не достигнут конец
-                                item = response.item();// получаем очередной элимент коллекции
-                                response.moveNext();// переходим к следующему элименту
-                                // работаем с элиментом
+                                item = response.item();// получаем очередной элемент коллекции
+                                response.moveNext();// переходим к следующему элементу
+                                // работаем с элементом
                                 if (0 == item.statusCode) data["TMP-CHECK"] = item.responseTime + " мс";
                                 // останавливаемся на первом
                                 break;
@@ -630,11 +694,11 @@ var search = new App({
             if (app.lib.count(action)) {// если список действий не пуст
                 // работаем в зависимости от наличия целевых объектов
                 if (items.length) {// если список целевых объектов не пуст
-                    // получаем номер компьютера от пользователя
+                    // получаем номер объекта от пользователя
                     if (!error) {// если нет ошибок
                         if (!("index" in config)) {// если нет в конфигурации
                             try {// пробуем получить данные
-                                wsh.stdOut.write("Введите номер компьютера: ");
+                                wsh.stdOut.write("Введите номер объекта: ");
                                 if (config.color) wsh.stdOut.write(app.fun.color("yellow", "", true));
                                 value = wsh.stdIn.readLine();// просим ввести строку
                                 if (config.color) wsh.stdOut.write(app.fun.color("reset", "", true));
@@ -777,10 +841,10 @@ var search = new App({
                     5: "Обязательные параметры не прошли проверку или отсутствуют.",
                     6: "Задана не допустимая комбинация параметров.",
                     7: "Не удалось получить контейнер для поиска данных.",
-                    8: "Не удалось найти подходящие компьютеры.",
+                    8: "Не удалось найти подходящие объекты.",
                     9: "Не удалось подключиться к локальному компьютеру.",
-                    10: "Не удалось инициировать получение номера компьютера.",
-                    11: "Отсутствует компьютер с указанным номером.",
+                    10: "Не удалось инициировать получение номера объекта.",
+                    11: "Отсутствует объект с указанным номером.",
                     12: "Не удалось инициировать получение номера действия.",
                     13: "Отсутствует указанное действие.",
                     14: "Не удалось подключиться к удалённому компьютеру.",
