@@ -1,4 +1,4 @@
-/* 1.2.1 ищет данне для переменных среды
+/* 1.2.2 ищет данне для переменных среды
 
 cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 
@@ -84,19 +84,6 @@ var search = new App({
                 };
                 // возвращаем результат
                 return output;
-            },
-
-            /**
-             * Считает количество ключей в объекте.
-             * @param {object} object - Объект для подсчёта.
-             * @returns {number} Количество ключей в объекте.
-             */
-
-            count: function (object) {
-                var index = 0;
-                if (object) for (var key in object) index++;
-                // возвращаем результат
-                return index;
             },
 
             /**
@@ -415,7 +402,7 @@ var search = new App({
                     // проверяем обязательные параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            (config.unit || !app.fun.count(action)) && config.item
+                            (config.unit || !app.lib.count(action)) && config.item
                         ) {// если проверка пройдена
                         } else error = 5;
                     };
@@ -423,7 +410,7 @@ var search = new App({
                     if (!error) {// если нет ошибок
                         if (// множественное условие
                             (!config.nowait || config.nowait && !config.service)
-                            && !app.fun.count(input)
+                            && !app.lib.count(input)
                             && !config.user
                         ) {// если проверка пройдена
                         } else error = 6;
@@ -467,7 +454,7 @@ var search = new App({
                     // проверяем обязательные параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            (config.unit || !app.fun.count(action)) && config.item
+                            (config.unit || !app.lib.count(action)) && config.item
                             && (!container || app.lib.validate(container, "guid"))
                         ) {// если проверка пройдена
                         } else error = 5;
@@ -552,14 +539,14 @@ var search = new App({
                     // проверяем обязательные параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            app.fun.count(action) && config.unit
+                            app.lib.count(action) && config.unit
                         ) {// если проверка пройдена
                         } else error = 5;
                     };
                     // проверяем запрещённые параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            !app.fun.count(input)
+                            !app.lib.count(input)
                             && !("search" in config)
                             && !("index" in config)
                             && !config.service
@@ -634,13 +621,13 @@ var search = new App({
                         value = app.fun.setDataPattern(config.item, data, false);
                         wsh.stdOut.writeLine(value);
                     };
-                    if (app.fun.count(action)) wsh.stdOut.writeLine();// выводим пустую строчку
+                    if (app.lib.count(action)) wsh.stdOut.writeLine();// выводим пустую строчку
                     isFirstLine = true;
                 };
             };
             // работаем в зависимости от наличия действий
             item = null;// сбрасываем информацию об целевом объекте
-            if (app.fun.count(action)) {// если список действий не пуст
+            if (app.lib.count(action)) {// если список действий не пуст
                 // работаем в зависимости от наличия целевых объектов
                 if (items.length) {// если список целевых объектов не пуст
                     // получаем номер компьютера от пользователя
@@ -684,7 +671,7 @@ var search = new App({
                     units = [];// сбрасываем значение
                     count = {};// сбрасываем значение
                     index = 0;// сбрасываем значение
-                    length = app.fun.count(action);
+                    length = app.lib.count(action);
                     for (var key in action) {// пробигаемся по действиям
                         data = {};// сбрасываем значение
                         data["TMP-KEY"] = key;
