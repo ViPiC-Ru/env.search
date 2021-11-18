@@ -1,4 +1,4 @@
-/* 1.3.0 ищет данне для переменных среды
+/* 1.3.1 ищет данне для переменных среды
 
 cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 
@@ -20,7 +20,7 @@ cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [
     nowait  - Флаг выполнения действия без ожидания (только при отсутствии service).
     color   - Флаг использования цветового оформления.
 <input>     - Шаблоны для получения данных из свойств объекта (только для режима ldap).
-<action>    - Действия в формате ключ и команда (доступны переменные).
+<action>    - Действия в формате ключ и команда или разделители (доступны переменные).
 
 */
 
@@ -232,6 +232,29 @@ var search = new App({
                 value = list.join("");
                 // возвращаем результат
                 return value;
+            },
+
+            /**
+             * Очищает шаблон от разделителей.
+             * @param {string} pattern - Шаблон для очистки.
+             * @returns {string} Очищенный шаблон.
+             */
+
+            clearPattern: function (pattern) {
+                var list, fragment, value;
+
+                pattern = pattern ? "" + pattern : "";
+                list = pattern.split(app.val.envWrap);
+                for (var i = 0, iLen = list.length; i < iLen; i++) {
+                    if (i % 2 && i != iLen - 1) {// если это ключ
+                    } else {// если это не ключ
+                        fragment = list[i];// получаем фрагмент
+                        list[i] = app.lib.strPad("", fragment.length, " ", "left");
+                    };
+                };
+                value = list.join(app.val.envWrap);
+                // возвращаем результат
+                return value;
             }
         },
         init: function () {// функция инициализации приложения
@@ -393,7 +416,7 @@ var search = new App({
             if (!error) {// если нет ошибок
                 while (index < length && !error) {
                     value = wsh.arguments.item(index);// получаем значение
-                    key = app.lib.strim(value, null, app.val.keyDelim, false, false);
+                    key = app.lib.strim(value, null, app.val.keyDelim, false, false) || value;
                     if (key) {// если параметр имеет нужный формат
                         value = app.lib.strim(value, app.val.keyDelim, null, false, false);
                         list = value.split(app.val.argWrap);// вспомогательная переменная
@@ -603,7 +626,7 @@ var search = new App({
                     // проверяем обязательные параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            app.lib.count(action) && config.unit
+                            app.lib.count(action, true) && config.unit
                         ) {// если проверка пройдена
                         } else error = 5;
                     };
@@ -685,13 +708,13 @@ var search = new App({
                         value = app.fun.setDataPattern(config.item, data, false);
                         wsh.stdOut.writeLine(value);
                     };
-                    if (app.lib.count(action)) wsh.stdOut.writeLine();// выводим пустую строчку
+                    if (app.lib.count(action, true)) wsh.stdOut.writeLine();// выводим пустую строчку
                     isFirstLine = true;
                 };
             };
             // работаем в зависимости от наличия действий
             item = null;// сбрасываем информацию об целевом объекте
-            if (app.lib.count(action)) {// если список действий не пуст
+            if (app.lib.count(action, true)) {// если список действий не пуст
                 // работаем в зависимости от наличия целевых объектов
                 if (items.length) {// если список целевых объектов не пуст
                     // получаем номер объекта от пользователя
@@ -735,15 +758,19 @@ var search = new App({
                     units = [];// сбрасываем значение
                     count = {};// сбрасываем значение
                     index = 0;// сбрасываем значение
-                    length = app.lib.count(action);
+                    length = app.lib.count(action, true);
                     for (var key in action) {// пробигаемся по действиям
+                        value = action[key];// получаем очередное значение
+                        isDelim = !value;// этот элимент является разделителем
                         data = {};// сбрасываем значение
                         data["TMP-KEY"] = key;
-                        data["TMP-VALUE"] = shell.expandEnvironmentStrings(action[key]);
-                        data["TMP-INDEX"] = app.lib.strPad(index + 1, ("" + length).length, "0", "left");
-                        if (!config.noalign) for (var key in data) count[key] = Math.max(data[key].length, count[key] || 0);
+                        if (!isDelim) {// если это не разделитель
+                            data["TMP-VALUE"] = shell.expandEnvironmentStrings(value);
+                            data["TMP-INDEX"] = app.lib.strPad(index + 1, ("" + length).length, "0", "left");
+                            if (!config.noalign) for (var key in data) count[key] = Math.max(data[key].length, count[key] || 0);
+                            index++;
+                        };
                         units.push(data);
-                        index++;
                     };
                 };
                 // выыодим список доступных действий
@@ -753,10 +780,12 @@ var search = new App({
                     for (index = 0; index < length; index++) {
                         data = units[index];// получаем очередной объект
                         data = app.lib.clone(data);// колонируем для изменений
+                        isDelim = !data["TMP-INDEX"];// этот элимент является разделителем
                         if (!config.noalign) for (var key in count) data[key] = app.lib.strPad(data[key] || "", count[key], " ", isNaN(app.lib.trim(data[key]).charAt(0)) ? "right" : "left");
                         if (value = data["TMP-VALUE"]) data["TMP-VALUE"] = app.fun.color(config.color ? "cyan" : null, value);
                         if (value = data["TMP-INDEX"]) data["TMP-INDEX"] = app.fun.color(config.color ? "yellow" : null, value);
-                        value = app.fun.setDataPattern(config.unit, data, false);
+                        if (value = data["TMP-KEY"]) if (isDelim) data["TMP-KEY"] = app.fun.color(config.color ? "yellow" : null, value);
+                        value = app.fun.setDataPattern(isDelim ? app.fun.clearPattern(config.unit) : config.unit, data, false);
                         wsh.stdOut.writeLine(value);
                     };
                     if (!("action" in config)) wsh.stdOut.writeLine();// выводим пустую строчку
@@ -773,7 +802,7 @@ var search = new App({
                             if (config.color) wsh.stdOut.write(app.fun.color("reset", "", true));
                             value = app.wsh.iconv("cp866", "windows-1251", value);
                             value = !isNaN(value) ? Number(value) - 1 : -1;
-                            for (var key in action) if (index++ == value) config.action = key;
+                            for (var key in action) if (action[key]) if (value == index++) config.action = key;
                             isFirstLine = false;
                         } catch (e) {// если возникли ошибки
                             try {// пробуем выполнить
@@ -835,7 +864,7 @@ var search = new App({
             if (error) {// если есть ошибка
                 value = {// список ошибок
                     1: "У входящего параметра отсутствует значение.",
-                    2: "У параметра с действием отсутствует значение.",
+                    2: "Задано пустое значение в параметре с действием.",
                     3: "Не удалось инициировать получение поискового запроса.",
                     4: "Указан не поддерживаемый режим.",
                     5: "Обязательные параметры не прошли проверку или отсутствуют.",
