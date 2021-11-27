@@ -1,4 +1,4 @@
-/* 1.3.2 ищет данне для переменных среды
+/* 1.3.3 ищет данне для переменных среды
 
 cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 
