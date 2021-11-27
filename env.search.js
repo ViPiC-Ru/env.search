@@ -1,4 +1,4 @@
-/* 1.3.1 ищет данне для переменных среды
+/* 1.3.2 ищет данне для переменных среды
 
 cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 
@@ -340,37 +340,42 @@ var search = new App({
                         };
                     };
                     // проверка доступности удалённого хоста
-                    if (!("check" in config)) {// если нет в конфигурации
-                        if (!app.lib.compare("check", value, true)) {// если пройдена основная проверка
-                            config.check = true;// задаём значение
+                    key = "check";// ключ проверяемого параметра
+                    if (!(key in config)) {// если нет в конфигурации
+                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
+                            config[key] = true;// задаём значение
                             continue;// переходим к следующему параметру
                         };
                     };
                     // получение данных о пользователе
-                    if (!("user" in config)) {// если нет в конфигурации
-                        if (!app.lib.compare("user", value, true)) {// если пройдена основная проверка
-                            config.user = true;// задаём значение
+                    key = "user";// ключ проверяемого параметра
+                    if (!(key in config)) {// если нет в конфигурации
+                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
+                            config[key] = true;// задаём значение
                             continue;// переходим к следующему параметру
                         };
                     };
                     // использование цветового оформления
-                    if (!("color" in config)) {// если нет в конфигурации
-                        if (!app.lib.compare("color", value, true)) {// если пройдена основная проверка
-                            config.color = true;// задаём значение
+                    key = "color";// ключ проверяемого параметра
+                    if (!(key in config)) {// если нет в конфигурации
+                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
+                            config[key] = true;// задаём значение
                             continue;// переходим к следующему параметру
                         };
                     };
                     // запрет выравнивания списков
-                    if (!("noalign" in config)) {// если нет в конфигурации
-                        if (!app.lib.compare("noalign", value, true)) {// если пройдена основная проверка
-                            config.noalign = true;// задаём значение
+                    key = "noalign";// ключ проверяемого параметра
+                    if (!(key in config)) {// если нет в конфигурации
+                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
+                            config[key] = true;// задаём значение
                             continue;// переходим к следующему параметру
                         };
                     };
                     // выполнить без ожидания
-                    if (!("nowait" in config)) {// если нет в конфигурации
-                        if (!app.lib.compare("nowait", value, true)) {// если пройдена основная проверка
-                            config.nowait = true;// задаём значение
+                    key = "nowait";// ключ проверяемого параметра
+                    if (!(key in config)) {// если нет в конфигурации
+                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
+                            config[key] = true;// задаём значение
                             continue;// переходим к следующему параметру
                         };
                     };
@@ -393,8 +398,10 @@ var search = new App({
                 };
             };
             // вносим поправки для конфигурации
-            if (!("item" in config)) config.item = "%NET-HOST%";
-            if (!("unit" in config)) config.unit = "%TMP-KEY%";
+            if (!error) {// если нет ошибок
+                if (!("item" in config)) config.item = "%NET-HOST%";
+                if (!("unit" in config)) config.unit = "%TMP-KEY%";
+            };
             // получаем входящие параметры
             if (!error) {// если нет ошибок
                 isDelim = false;// сбрасываем значение
