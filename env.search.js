@@ -1,4 +1,4 @@
-/* 1.3.3 ищет данне для переменных среды
+/* 1.3.4 ищет данне для переменных среды
 
 cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 
@@ -661,8 +661,8 @@ var search = new App({
                 if (config.check) {// если требуется проверка
                     // подключаемся к локальному хосту
                     if (!error) {// если нет ошибок
-                        try {// пробуем подключиться к компьютеру
-                            local = locator.connectServer("", "root\\CIMV2");
+                        try {// пробуем подключиться к компьютеру используя флаг wbemConnectFlagUseMaxWait
+                            local = locator.connectServer(".", "root\\CIMV2", null, null, null, null, 0x80);
                         } catch (e) {// если возникли ошибки
                             error = 9;
                         };
@@ -832,8 +832,8 @@ var search = new App({
                 // подключаемся к удалённому хосту
                 if (!error && config.service) {// если нужно выполнить
                     data = item;// получаем данные
-                    try {// пробуем подключиться к компьютеру
-                        remote = locator.connectServer(data["NET-HOST"], "root\\CIMV2");
+                    try {// пробуем подключиться к компьютеру используя флаг wbemConnectFlagUseMaxWait
+                        remote = locator.connectServer(data["NET-HOST"], "root\\CIMV2", null, null, null, null, 0x80);
                     } catch (e) {// если возникли ошибки
                         error = 14;
                     };
