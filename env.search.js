@@ -1,4 +1,4 @@
-/* 1.3.4 ищет данне для переменных среды
+/* 1.4.0 ищет данне для переменных среды
 
 cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
 
@@ -19,6 +19,7 @@ cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [
     noalign - Флаг запрета выравнивания выборок и списков.
     nowait  - Флаг выполнения действия без ожидания (только при отсутствии service).
     color   - Флаг использования цветового оформления.
+    repeat  - Флаг повторения действия.
 <input>     - Шаблоны для получения данных из свойств объекта (только для режима ldap).
 <action>    - Действия в формате ключ и команда или разделители (доступны переменные).
 
@@ -90,38 +91,54 @@ var search = new App({
             },
 
             /**
-             * Раскрашиваем текст для вывода в консоль.
-             * @param {string} name - Название поддерживаемого цвета.
-             * @param {string} [text] - Текст для раскрашивания.
-             * @param {boolean} [nowrap] - Не оборачивать.
-             * @returns {string} Раскрашенный текст.
+             * Добавляет управляющую последовательность к тексту.
+             * @param {string} type - Тип управляющей последовательности.
+             * @param {string} option - Опция для типа управляющий последовательности.
+             * @param {string} [text] - Текст к которому добавляется последовательность.
+             * @param {boolean} [reset] - Добавить сбрасывающую последовательность в конце.
+             * @returns {string} Текст с добавленной последовательностью.
              */
 
-            color: function (name, text, nowrap) {
-                var value, index, prefix, suffix, index;
+            escape: function (type, option, text, reset) {
+                var prefix, code, suffix, undo;
 
-                suffix = "m";
                 text = text ? "" + text : "";
-                prefix = String.fromCharCode(27) + "[";
-                switch (name) {// поддерживаемые цвета
-                    // styles
-                    case "reset": index = 0; break;
-                    // strong foreground colors
-                    case "black": index = 90; break;
-                    case "red": index = 91; break;
-                    case "green": index = 92; break;
-                    case "yellow": index = 93; break;
-                    case "blue": index = 94; break;
-                    case "purple": index = 95; break;
-                    case "cyan": index = 96; break;
-                    case "white": index = 97; break;
+                prefix = String.fromCharCode(27);
+                // формируем последовательность
+                switch (type) {// поддерживаемые типы
+                    case "color":// цвет шрифта
+                        prefix += "["; suffix = "m";
+                        undo = prefix + "0" + suffix;
+                        switch (option) {// поддерживаемые цвета
+                            case "black": code = "90"; break;
+                            case "red": code = "91"; break;
+                            case "green": code = "92"; break;
+                            case "yellow": code = "93"; break;
+                            case "blue": code = "94"; break;
+                            case "purple": code = "95"; break;
+                            case "cyan": code = "96"; break;
+                            case "white": code = "97"; break;
+                            case "default": code = "0"; break;
+                        };
+                        break;
+                    case "cursor":// положение курсора
+                        prefix += "["; code = "1";
+                        undo = prefix + "2K";
+                        switch (option) {// поддерживаемые цвета
+                            case "up": suffix = "A"; break;
+                            case "down": suffix = "B"; break;
+                            case "forward": suffix = "C"; break;
+                            case "backward": suffix = "D"; break;
+                        };
+                        break;
                 };
-                if (!isNaN(index)) {// если цвет распознан
-                    value = prefix + index + suffix + text;
-                    if (!nowrap) value += prefix + 0 + suffix;
-                } else value = text;
+                // оборачиваем текст
+                if (code && suffix) {// если получены все данные
+                    text = prefix + code + suffix + text;
+                    if (reset) text += undo;
+                };
                 // возвращаем результат
-                return value;
+                return text;
             },
 
             /**
@@ -261,6 +278,7 @@ var search = new App({
             var key, value, index, length, list, mode, container, fso, shell, isDelim, file,
                 files, path, units, data, locator, local, remote, response, users, count, delim,
                 service, command, item, items = [], config = {}, input = {}, action = {},
+                isSetIndex = false, isSetAction = false, isSetSearch = false,
                 isFirstLine = true, error = 0;
 
             shell = new ActiveXObject("WScript.Shell");
@@ -313,6 +331,7 @@ var search = new App({
                             list = value.split(app.val.argWrap);// вспомогательная переменная
                             if (3 == list.length && !list[0] && !list[2]) value = list[1];
                             config[key] = value;
+                            isSetSearch = true;
                             continue;// переходим к следующему параметру
                         };
                     };
@@ -325,6 +344,7 @@ var search = new App({
                             if (3 == list.length && !list[0] && !list[2]) value = list[1];
                             value = !isNaN(value) ? Number(value) - 1 : -1;
                             config[key] = value;
+                            isSetIndex = true;
                             continue;// переходим к следующему параметру
                         };
                     };
@@ -336,6 +356,7 @@ var search = new App({
                             list = value.split(app.val.argWrap);// вспомогательная переменная
                             if (3 == list.length && !list[0] && !list[2]) value = list[1];
                             config[key] = value;
+                            isSetAction = true;
                             continue;// переходим к следующему параметру
                         };
                     };
@@ -357,6 +378,14 @@ var search = new App({
                     };
                     // использование цветового оформления
                     key = "color";// ключ проверяемого параметра
+                    if (!(key in config)) {// если нет в конфигурации
+                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
+                            config[key] = true;// задаём значение
+                            continue;// переходим к следующему параметру
+                        };
+                    };
+                    // повторение заданного действия
+                    key = "repeat";// ключ проверяемого параметра
                     if (!(key in config)) {// если нет в конфигурации
                         if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
                             config[key] = true;// задаём значение
@@ -436,12 +465,12 @@ var search = new App({
             };
             // получаем поисковой запрос от пользователя
             if (!error && mode) {// если нужно выполнить
-                if (!("search" in config)) {// если нет в конфигурации
+                if (!isSetSearch) {// если нет в конфигурации
                     try {// пробуем получить данные
                         wsh.stdOut.write("Введите поисковой запрос: ");
-                        if (config.color) wsh.stdOut.write(app.fun.color("yellow", "", true));
+                        if (config.color) wsh.stdOut.write(app.fun.escape("color", "yellow"));
                         value = wsh.stdIn.readLine();// просим ввести строку
-                        if (config.color) wsh.stdOut.write(app.fun.color("reset", "", true));
+                        if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
                         value = app.wsh.iconv("cp866", "windows-1251", value);
                         config.search = value;
                         isFirstLine = false;
@@ -466,7 +495,8 @@ var search = new App({
                     // проверяем запрещённые параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            (!config.nowait || config.nowait && !config.service)
+                            (!config.nowait || !config.service)
+                            && (!config.repeat || (isSetAction ? !config.nowait : config.color))
                             && !app.lib.count(input)
                             && !config.user
                         ) {// если проверка пройдена
@@ -512,7 +542,8 @@ var search = new App({
                     // проверяем запрещённые параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            (!config.nowait || config.nowait && !config.service)
+                            (!config.nowait || !config.service)
+                            && (!config.repeat || (isSetAction ? !config.nowait : config.color))
                             && !app.lib.count(input)
                             && !config.user
                         ) {// если проверка пройдена
@@ -556,7 +587,8 @@ var search = new App({
                     // проверяем запрещённые параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            (!config.nowait || config.nowait && !config.service)
+                            (!config.nowait || !config.service)
+                            && (!config.repeat || (isSetAction ? !config.nowait : config.color))
                         ) {// если проверка пройдена
                         } else error = 6;
                     };
@@ -641,8 +673,9 @@ var search = new App({
                     if (!error) {// если нет ошибок
                         if (// множественное условие
                             !app.lib.count(input)
-                            && !("search" in config)
-                            && !("index" in config)
+                            && (!config.repeat || (isSetAction ? !config.nowait : config.color))
+                            && !isSetSearch
+                            && !isSetIndex
                             && !config.service
                             && !config.check
                             && !config.user
@@ -710,8 +743,8 @@ var search = new App({
                         data = items[index];// получаем очередной объект
                         data = app.lib.clone(data);// колонируем для изменений
                         if (!config.noalign) for (var key in count) data[key] = app.lib.strPad(data[key] || "", count[key], " ", isNaN(app.lib.trim(data[key]).charAt(0)) ? "right" : "left");
-                        if (value = data["TMP-INDEX"]) data["TMP-INDEX"] = app.fun.color(config.color ? "yellow" : null, value);
-                        if (value = data["NET-HOST"]) data["NET-HOST"] = app.fun.color(config.color ? "cyan" : null, value);
+                        if (value = data["TMP-INDEX"]) data["TMP-INDEX"] = app.fun.escape("color", config.color && "yellow", value, true);
+                        if (value = data["NET-HOST"]) data["NET-HOST"] = app.fun.escape("color", config.color && "cyan", value, true);
                         value = app.fun.setDataPattern(config.item, data, false);
                         wsh.stdOut.writeLine(value);
                     };
@@ -726,12 +759,12 @@ var search = new App({
                 if (items.length) {// если список целевых объектов не пуст
                     // получаем номер объекта от пользователя
                     if (!error) {// если нет ошибок
-                        if (!("index" in config)) {// если нет в конфигурации
+                        if (!isSetIndex) {// если нет в конфигурации
                             try {// пробуем получить данные
                                 wsh.stdOut.write("Введите номер объекта: ");
-                                if (config.color) wsh.stdOut.write(app.fun.color("yellow", "", true));
+                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "yellow"));
                                 value = wsh.stdIn.readLine();// просим ввести строку
-                                if (config.color) wsh.stdOut.write(app.fun.color("reset", "", true));
+                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
                                 value = app.wsh.iconv("cp866", "windows-1251", value);
                                 value = !isNaN(value) ? Number(value) - 1 : -1;
                                 config.index = value;
@@ -789,83 +822,92 @@ var search = new App({
                         data = app.lib.clone(data);// колонируем для изменений
                         isDelim = !data["TMP-INDEX"];// этот элимент является разделителем
                         if (!config.noalign) for (var key in count) data[key] = app.lib.strPad(data[key] || "", count[key], " ", isNaN(app.lib.trim(data[key]).charAt(0)) ? "right" : "left");
-                        if (value = data["TMP-VALUE"]) data["TMP-VALUE"] = app.fun.color(config.color ? "cyan" : null, value);
-                        if (value = data["TMP-INDEX"]) data["TMP-INDEX"] = app.fun.color(config.color ? "yellow" : null, value);
-                        if (value = data["TMP-KEY"]) if (isDelim) data["TMP-KEY"] = app.fun.color(config.color ? "yellow" : null, value);
+                        if (value = data["TMP-VALUE"]) data["TMP-VALUE"] = app.fun.escape("color", config.color && "cyan", value, true);
+                        if (value = data["TMP-INDEX"]) data["TMP-INDEX"] = app.fun.escape("color", config.color && "yellow", value, true);
+                        if (value = data["TMP-KEY"]) if (isDelim) data["TMP-KEY"] = app.fun.escape("color", config.color && "yellow", value, true);
                         value = app.fun.setDataPattern(isDelim ? app.fun.clearPattern(config.unit) : config.unit, data, false);
                         wsh.stdOut.writeLine(value);
                     };
-                    if (!("action" in config)) wsh.stdOut.writeLine();// выводим пустую строчку
+                    if (!isSetAction) wsh.stdOut.writeLine();// выводим пустую строчку
+                    if (!isSetAction && config.color) wsh.stdOut.writeLine();// выводим пустую строчку
                     isFirstLine = true;
                 };
-                // получаем номер действия от пользователя
-                if (!error) {// если нет ошибок
-                    if (!("action" in config)) {// если нет в конфигурации
-                        try {// пробуем получить данные
-                            index = 0;// сбрасываем значение
-                            wsh.stdOut.write("Введите номер действия: ");
-                            if (config.color) wsh.stdOut.write(app.fun.color("yellow", "", true));
-                            value = wsh.stdIn.readLine();// просим ввести строку
-                            if (config.color) wsh.stdOut.write(app.fun.color("reset", "", true));
-                            value = app.wsh.iconv("cp866", "windows-1251", value);
-                            value = !isNaN(value) ? Number(value) - 1 : -1;
-                            for (var key in action) if (action[key]) if (value == index++) config.action = key;
-                            isFirstLine = false;
-                        } catch (e) {// если возникли ошибки
-                            try {// пробуем выполнить
-                                wsh.stdOut.writeLine();// выводим пустую строчку
-                            } catch (e) { };// игнорируем исключения
-                            error = 12;
+                // работаем с действием в цикле
+                do {// выполняем циклические операции
+                    // получаем номер действия от пользователя
+                    if (!error) {// если нет ошибок
+                        if (!isSetAction) {// если нет в конфигурации
+                            try {// пробуем получить данные
+                                index = 0;// сбрасываем значение
+                                config.action = null;// сбрасываем значение
+                                if (config.color) wsh.stdOut.write(app.fun.escape("cursor", "up", null, true));
+                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
+                                wsh.stdOut.write("Введите номер действия: ");
+                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "yellow"));
+                                value = wsh.stdIn.readLine();// просим ввести строку
+                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
+                                value = app.wsh.iconv("cp866", "windows-1251", value);
+                                value = !isNaN(value) ? Number(value) - 1 : -1;
+                                for (var key in action) if (action[key]) if (value == index++) config.action = key;
+                                isFirstLine = false;
+                            } catch (e) {// если возникли ошибки
+                                try {// пробуем выполнить
+                                    wsh.stdOut.writeLine();// выводим пустую строчку
+                                } catch (e) { };// игнорируем исключения
+                                error = 12;
+                            };
                         };
                     };
-                };
-                // получаем команду целевого действия
-                if (!error) {// если нет ошибок
-                    if (config.action in action) {// если действие существует
-                        value = action[config.action];
-                        command = shell.expandEnvironmentStrings(value);
-                    } else error = 13;
-                };
-            };
-            // работаем в зависимости от наличия команды
-            if (command) {// если есть команда для выполнения
-                // подключаемся к удалённому хосту
-                if (!error && config.service) {// если нужно выполнить
-                    data = item;// получаем данные
-                    try {// пробуем подключиться к компьютеру используя флаг wbemConnectFlagUseMaxWait
-                        remote = locator.connectServer(data["NET-HOST"], "root\\CIMV2", null, null, null, null, 0x80);
-                    } catch (e) {// если возникли ошибки
-                        error = 14;
+                    // получаем команду целевого действия
+                    if (!error) {// если нет ошибок
+                        if (config.action in action) {// если действие существует
+                            value = action[config.action];
+                            command = shell.expandEnvironmentStrings(value);
+                        } else error = 13;
                     };
-                };
-                // запускаем службу на удалённом хосте
-                if (!error && config.service) {// если нужно выполнить
-                    try {// пробуем выполнить на компьютере
-                        service = remote.get("Win32_Service.Name='" + config.service + "'");
-                        if (service.started || !service.startService()) {// если удалось запустить службу
-                        } else error = 16;
-                    } catch (e) {// если возникли ошибки
-                        error = 15;
+                    // проверяем команду целевого действия
+                    if (!error) {// если нет ошибок
+                        if (command) {// если не пустая команда
+                        } else error = 14;
                     };
-                };
-                // выполняем команду на локальном хосте
-                if (!error) {// если нет ошибок
-                    try {// пробуем выполнить комманду
-                        shell.run(command, 1, !config.nowait);
-                    } catch (e) {// если возникли ошибки
-                        error = 17;
+                    // подключаемся к удалённому хосту
+                    if (!error && config.service) {// если нужно выполнить
+                        data = item;// получаем данные
+                        try {// пробуем подключиться к компьютеру используя флаг wbemConnectFlagUseMaxWait
+                            remote = locator.connectServer(data["NET-HOST"], "root\\CIMV2", null, null, null, null, 0x80);
+                        } catch (e) {// если возникли ошибки
+                            error = 15;
+                        };
                     };
-                };
-                // останавливаем службу на удалённом хосте
-                if (!error && config.service) {// если нужно выполнить
-                    try {// пробуем выполнить на компьютере
-                        service = remote.get("Win32_Service.Name='" + config.service + "'");
-                        if (!service.started || !service.stopService()) {// если удалось остановить службу
-                        } else error = 18;
-                    } catch (e) {// если возникли ошибки
-                        error = 15;
+                    // запускаем службу на удалённом хосте
+                    if (!error && config.service) {// если нужно выполнить
+                        try {// пробуем выполнить на компьютере
+                            service = remote.get("Win32_Service.Name='" + config.service + "'");
+                            if (service.started || !service.startService()) {// если удалось запустить службу
+                            } else error = 17;
+                        } catch (e) {// если возникли ошибки
+                            error = 16;
+                        };
                     };
-                };
+                    // выполняем команду на локальном хосте
+                    if (!error) {// если нет ошибок
+                        try {// пробуем выполнить комманду
+                            shell.run(command, 1, !config.nowait);
+                        } catch (e) {// если возникли ошибки
+                            error = 18;
+                        };
+                    };
+                    // останавливаем службу на удалённом хосте
+                    if (!error && config.service) {// если нужно выполнить
+                        try {// пробуем выполнить на компьютере
+                            service = remote.get("Win32_Service.Name='" + config.service + "'");
+                            if (!service.started || !service.stopService()) {// если удалось остановить службу
+                            } else error = 19;
+                        } catch (e) {// если возникли ошибки
+                            error = 16;
+                        };
+                    };
+                } while (!error && config.repeat);
             };
             // выводим информацию об ошибке
             if (error) {// если есть ошибка
@@ -883,14 +925,15 @@ var search = new App({
                     11: "Отсутствует объект с указанным номером.",
                     12: "Не удалось инициировать получение номера действия.",
                     13: "Отсутствует указанное действие.",
-                    14: "Не удалось подключиться к удалённому компьютеру.",
-                    15: "Не удалось найти указанную службу на удалённому компьютеру.",
-                    16: "Не удалось запустить службу на удалённом компьютере.",
-                    17: "Не удалось выполнить комманду действия.",
-                    18: "Не удалось остановить службу на удалённом компьютере."
+                    14: "Сформирована пустая команды для действия.",
+                    15: "Не удалось подключиться к удалённому компьютеру.",
+                    16: "Не удалось найти указанную службу на удалённому компьютеру.",
+                    17: "Не удалось запустить службу на удалённом компьютере.",
+                    18: "Не удалось выполнить комманду указанного действия.",
+                    19: "Не удалось остановить службу на удалённом компьютере."
                 }[error];
                 if (value) {// если есть сообщение
-                    value = app.fun.color(config.color ? "red" : null, value);
+                    value = app.fun.escape("color", config.color && "red", value, true);
                     try {// пробуем выполнить
                         wsh.stdErr.write(value);
                     } catch (e) {// если возникли ошибки
