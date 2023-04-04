@@ -1,13 +1,11 @@
-/* 1.4.0 ищет данне для переменных среды
+/* 2.0.0 ищет данне для переменных среды
 
-cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [<action>...]
+cscript env.search.min.js [location] [<config>...] [\\ <filter>...] [\\ <input>...] [\\ <action>...]
 
-<mode>      - Режим поиска данных для переменных среды.
-    file    - Получение данных из tsv или csv файла.
-    folder  - Получение данных из папки с ini файлами.
-    ldap    - Получение данных из active directory.
-<container> - Путь к файлу, папке или guid (допускается пустое значение).
-<option>    - Дополнительные опции (может быть несколько, порядок не важен).
+<location>  - Путь к файлу, папке или url к источнику данных.
+    file    - Получение данных из папки с ini файлами или из tsv, csv файла.
+    ldap    - Получение данных из active directory (guid, cn, dn или пустое значение).
+<config>    - Конфигурационные параметры (может быть несколько, порядок не важен).
     search  - Поисковой запрос (можно опустить, будет запрошен в процессе).
     index   - Номер объекта в выборке (можно опустить, будет запрошен в процессе).
     action  - Ключ действия (можно опустить, будет запрошен в процессе).
@@ -15,20 +13,27 @@ cscript env.search.min.js [<mode> [<container>]] [<option>...] [<input>...] \\ [
     unit    - Шаблон представления других списков (доступны переменные).
     service - Имя удалённой службы, которую нужно запустить перед выполнением действия.
     check   - Флаг проверки доступности целевых компьютеров.
-    user    - Флаг запроса информации по пользователю (только для режима ldap).
+    user    - Флаг запроса информации по пользователю (только для url схемы ldap).
     noalign - Флаг запрета выравнивания выборок и списков.
     nowait  - Флаг выполнения действия без ожидания (только при отсутствии service).
     color   - Флаг использования цветового оформления.
     repeat  - Флаг повторения действия.
-<input>     - Шаблоны для получения данных из свойств объекта (только для режима ldap).
+<filter>    - Фильтры по свойствам объекта (доступны wildcard шаблоны и объединения ключей).
+<input>     - Шаблоны для получения данных из свойств объекта (только для url схемы ldap).
 <action>    - Действия в формате ключ и команда или разделители (доступны переменные).
 
 */
 
 var search = new App({
+    dosCharset: "cp866",                                // кодировка для dos
+    winCharset: "windows-1251",                         // кодировка для windows
+    hideValue: "***",                                   // отображение для скрытого значения
+    hideEnd: "-HIDE",                                   // окончание названия для скрытия значения
     argWrap: '"',                                       // основное обрамление аргументов
     altWrap: "'",                                       // альтернативное обрамление аргументов
-    envWrap: '%',                                       // основное обрамление переменных
+    envWrap: "%",                                       // основное обрамление переменных
+    spсDelim: " ",                                      // пробельный разделитель
+    argDelim: ",",                                      // разделитель названий в ключе аргумента
     keyDelim: "=",                                      // разделитель ключа от значения
     csvDelim: ";",                                      // разделитель значений для файла выгрузки csv
     tsvDelim: "\t",                                     // разделитель значений для файла выгрузки tsv
@@ -66,7 +71,7 @@ var search = new App({
                     // выполняем поиск совподения с правилом
                     flag = false;// найдено ли совпадение
                     for (var key in rule) {// пробигаемся по правилу
-                        value = input.substr(i, key.length);
+                        value = input.substring(i, i + key.length);
                         flag = value.toLowerCase() == key;
                         if (flag) break;
                     };
@@ -74,15 +79,15 @@ var search = new App({
                     if (flag) {// если найдено совпадение
                         flag = value == value.toLowerCase();
                         if (!flag) {// если не всё в нижнем регистре
-                            value = input.substr(i + key.length, 1);
+                            value = input.substring(i + key.length, i + key.length + 1);
                             flag = value == value.toUpperCase();
                             if (!flag) {// если далее идёт нижний регистр
-                                value = rule[key].substr(0, 1).toUpperCase() + rule[key].substr(1);
+                                value = rule[key].substring(0, 1).toUpperCase() + rule[key].substring(1);
                             } else value = rule[key].toUpperCase();
                         } else value = rule[key];
                         // добовляем смещение
                         i += key.length - 1;
-                    } else value = input.substr(i, 1);
+                    } else value = input.substring(i, i + 1);
                     // формируем резултат
                     output += value;
                 };
@@ -142,41 +147,17 @@ var search = new App({
             },
 
             /**
-             * Проверяет свойства объекта на поисковой запрос.
-             * @param {object} data - Объект с данными для проверки.
-             * @param {string} [search] - Поисковой запрос.
-             * @returns {boolean} Соответствие объекта поисковому запросу.
-             */
-
-            checkDataProperty: function (data, search) {
-                return !!data && (
-                    !search // пустой поисковой запрос
-                    || app.lib.hasValue(data["USR-NAME"], search, false)
-                    || app.lib.hasValue(data["USR-NAME"], app.fun.translit(search), false)
-                    || app.lib.hasValue(data["NET-HOST"], search, false)
-                    || app.lib.hasValue(data["DEV-NAME"], search, false)
-                    || app.lib.hasValue(data["USR-LOGIN"], search, false)
-                    || app.lib.hasValue(data["PCB-BIOS-SERIAL"], search, false)
-                    || app.lib.hasValue(data["DEV-DESCRIPTION"], search, false)
-                    || app.lib.hasValue(data["NET-MAC"], search, false)
-                    || app.lib.hasValue(data["SYS-KEY"], search, false)
-                    || app.lib.hasValue(data["NET-IP-V4"], search, false)
-                    || app.lib.hasValue(data["SYS-VERSION"], search, false)
-                );
-            },
-
-            /**
              * Получает значение свойства ADSI объекта.
              * @param {ADSI} item - ADSI объект для получения данных.
-             * @param {string} property - Свойство ADSI объекта с данными.
+             * @param {string} attribute - Свойство ADSI объекта с данными.
              * @returns {string} Значение свойства ADSI объекта.
              */
 
-            getItemProperty: function (item, property) {
+            getItemAttribute: function (item, attribute) {
                 var value = "";
 
                 try {// пробуем получить данные
-                    value = item.get(property);
+                    value = item.get(attribute);
                 } catch (e) { };// игнорируем исключения
                 // возвращаем результат
                 return value;
@@ -191,30 +172,34 @@ var search = new App({
              */
 
             getDataPattern: function (pattern, value, strict) {
-                var list, index, fragment, key, offset = 0,
-                    data = {}, error = 0;
+                var fragments, index, fragment, name, isSkip, isName,
+                    offset = 0, data = {}, error = 0;
 
                 value = value ? "" + value : "";
                 pattern = pattern ? "" + pattern : "";
-                list = pattern.split(app.val.envWrap);
-                for (var i = 0, iLen = list.length; i < iLen && !error; i++) {
-                    fragment = list[i];// получаем фрагмент
-                    if (i % 2 && i != iLen - 1) {// если это ключ
-                        key = strict ? fragment : fragment.toUpperCase();
-                        if (key) {// если ключ задан
-                            fragment = list[i + 1];// получаем фрагмент
+                fragments = pattern.split(app.val.envWrap);
+                for (var i = 0, j = 0, iLen = fragments.length; i < iLen && !error; i++) {
+                    fragment = fragments[i];// получаем фрагмент
+                    isName = ((i + j) % 2 && i != iLen - 1);
+                    isSkip = isName && ~fragment.indexOf(app.val.spсDelim);
+                    if (isName && !isSkip) {// если это имя
+                        name = strict ? fragment : fragment.toUpperCase();
+                        if (name) {// если ключ задан
+                            fragment = fragments[i + 1];// получаем фрагмент
                             if (!fragment.length) index = value.length;
                             else index = value.indexOf(fragment, offset);
                             if (~index) {// если найдено совпадение
-                                data[key] = value.substr(offset, index - offset);
+                                data[name] = value.substring(offset, index);
                                 offset = index;
                             } else error = 3;
                         } else error = 2;
-                    } else {// если это не ключ
+                    } else {// если это не имя
+                        if (isSkip) offset += app.val.envWrap.length;
                         index = value.indexOf(fragment, offset);
                         if (offset == index) {// если найдено совпадение
                             offset += fragment.length;
                         } else error = 1;
+                        if (isSkip) j++;
                     };
                 };
                 // возвращаем результат
@@ -226,27 +211,41 @@ var search = new App({
              * @param {string} pattern - Шаблон для заполнения данными.
              * @param {object} [data] - Данные для заполнения шаблона.
              * @param {boolean} [strict] - Учитывать регистр букв для ключей.
+             * @param {boolean} [clear] - Удалять шаблоны для не известных ключей.
              * @returns {string} Заполненный шаблон с данными.
              */
 
-            setDataPattern: function (pattern, data, strict) {
-                var list, fragment, value;
+            setDataPattern: function (pattern, data, strict, clear) {
+                var fragments, fragment, value, isChange, isSkip, isName;
 
                 data = data || {};// по умолчанию
                 pattern = pattern ? "" + pattern : "";
-                list = pattern.split(app.val.envWrap);
-                for (var i = 0, iLen = list.length; i < iLen; i++) {
-                    if (i % 2 && i != iLen - 1) {// если это ключ
-                        fragment = list[i];// получаем фрагмент
-                        list[i] = "";// сбрасываем значение
-                        for (var key in data) {// пробигаемся по данным
-                            if (!app.lib.compare(key, fragment, !strict)) {
-                                list[i] = data[key];
+                fragments = pattern.split(app.val.envWrap);
+                for (var i = 0, j = 0, iLen = fragments.length; i < iLen; i++) {
+                    fragment = fragments[i];// получаем фрагмент
+                    isName = ((i + j) % 2 && i != iLen - 1);
+                    isSkip = isName && ~fragment.indexOf(app.val.spсDelim);
+                    if (isName && !isSkip) {// если это имя
+                        isChange = false;// изменён ли фрагмент на данные
+                        for (var name in data) {// пробигаемся по данным
+                            if (!app.lib.compare(name, fragment, !strict)) {
+                                fragment = data[name];
+                                fragments[i] = fragment;
+                                isChange = true;
                             };
                         };
+                        if (!isChange) {// если изменения не было
+                            if (clear) fragment = "";// сбрасываем значение
+                            else fragment = app.val.envWrap + fragment + app.val.envWrap;
+                            fragments[i] = fragment;
+                        };
+                    } else if (isSkip) {// если нужно пропустить
+                        fragment = app.val.envWrap + fragment;
+                        fragments[i] = fragment;
+                        j++;
                     };
                 };
-                value = list.join("");
+                value = fragments.join("");
                 // возвращаем результат
                 return value;
             },
@@ -257,304 +256,258 @@ var search = new App({
              * @returns {string} Очищенный шаблон.
              */
 
-            clearPattern: function (pattern) {
-                var list, fragment, value;
+            clearDelimPattern: function (pattern) {
+                var fragments, fragment, value, isSkip, isName;
 
                 pattern = pattern ? "" + pattern : "";
-                list = pattern.split(app.val.envWrap);
-                for (var i = 0, iLen = list.length; i < iLen; i++) {
-                    if (i % 2 && i != iLen - 1) {// если это ключ
+                fragments = pattern.split(app.val.envWrap);
+                for (var i = 0, j = 0, iLen = fragments.length; i < iLen; i++) {
+                    fragment = fragments[i];// получаем фрагмент
+                    isName = ((i + j) % 2 && i != iLen - 1);
+                    isSkip = isName && ~fragment.indexOf(app.val.spсDelim);
+                    if (isName && !isSkip) {// если это имя
                     } else {// если это не ключ
-                        fragment = list[i];// получаем фрагмент
-                        list[i] = app.lib.strPad("", fragment.length, " ", "left");
+                        fragment = fragments[i];// получаем фрагмент
+                        fragment = app.lib.strPad("", fragment.length, app.val.spсDelim, "left");
+                        fragments[i] = fragment;
+                        if (isSkip) j++;
                     };
                 };
-                value = list.join(app.val.envWrap);
+                value = fragments.join(app.val.envWrap);
                 // возвращаем результат
                 return value;
+            },
+
+            /**
+             * Преобразует значение для индексного параметра в число.
+             * @param {string} value - Значение для преобразования.
+             * @returns {array} Массив с преобразованным значением.
+             */
+
+            convIndexParam: function (value) {
+
+                if (isNaN(value)) value = 0;
+                else value = Number(value);
+                // возвращаем результат
+                return [value - 1];
+            },
+
+            /**
+             * Преобразует значение и название для параметра действия.
+             * @param {string} value - Значение для преобразования.
+             * @param {string} name - Название для преобразования.
+             * @returns {array} Массив с преобразованным значением и названием.
+             */
+
+            convActionParam: function (value, name) {
+                return name ? [value, name] : [name, value];
+            },
+
+            /**
+             * Преобразует значение для адресного параметра.
+             * @param {string} value - Значение для преобразования.
+             * @returns {array} Массив с преобразованным значением.
+             */
+
+            convLocationParam: function (value) {
+                var location = app.lib.url2obj(value);
+
+                location.nix = app.lib.nix2win(location.path, null, true);
+                location.win = app.lib.nix2win(location.path, location.domain, false);
+                if (!location.scheme) location.scheme = "file";
+                // возвращаем результат
+                return [location];
+            },
+
+            /**
+             * Преобразует убирая название у пустого значения.
+             * @param {string} value - Значение для преобразования.
+             * @param {string} name - Название для преобразования.
+             * @returns {array} Массив с преобразованным значением.
+             */
+
+            convNoEmptyParam: function (value, name) {
+                return value ? [value, name] : [value, null];
             }
         },
         init: function () {// функция инициализации приложения
-            var key, value, index, length, list, mode, container, fso, shell, isDelim, file,
-                files, path, units, data, locator, local, remote, response, users, count, delim,
-                service, command, item, items = [], config = {}, input = {}, action = {},
-                isSetIndex = false, isSetAction = false, isSetSearch = false,
-                isFirstLine = true, error = 0;
+            var key, value, dn, wildcard, query, container, fso, shell, isDelim, isFound, isMatch, file, params, map, data,
+                i, iLen, j, jLen, files, units, locator, local, remote, response, users, count, delim, wrap, isNeedInput,
+                end, cache, name, names, service, command, fragments, fragment, item, items = [], isFirstLine = true,
+                config = { item: "%NET-HOST%", unit: "%TMP-KEY%", location: {} }, filter = {}, input = {}, action = {},
+                error = 0;
 
             shell = new ActiveXObject("WScript.Shell");
             fso = new ActiveXObject("Scripting.FileSystemObject");
             locator = new ActiveXObject("wbemScripting.Swbemlocator");
             locator.security_.impersonationLevel = 3;// Impersonate
-            // получаем параметры
+            params = app.wsh.arg2arr(wsh.arguments);// переданные аргументы
+            delim = app.val.keyDelim; wrap = app.val.argWrap; end = app.val.putDelim;
+            // получаем конфигурационные параметры
             if (!error) {// если нет ошибок
-                length = wsh.arguments.length;// получаем длину
-                for (index = 0; index < length; index++) {// пробигаемся по параметрам
-                    value = wsh.arguments.item(index);// получаем очередное значение
-                    // запуск службы на удалённом хосте
-                    if (!("service" in config)) {// если нет в конфигурации
-                        key = app.lib.strim(value, null, app.val.keyDelim, false, false).toLowerCase();
-                        if ("service" == key) {// если пройдена основная проверка
-                            value = app.lib.strim(value, app.val.keyDelim, null, false, false);
-                            list = value.split(app.val.argWrap);// вспомогательная переменная
-                            if (3 == list.length && !list[0] && !list[2]) value = list[1];
-                            config[key] = value;
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // оформление строки с целевым объектом
-                    if (!("item" in config)) {// если нет в конфигурации
-                        key = app.lib.strim(value, null, app.val.keyDelim, false, false).toLowerCase();
-                        if ("item" == key) {// если пройдена основная проверка
-                            value = app.lib.strim(value, app.val.keyDelim, null, false, false);
-                            list = value.split(app.val.argWrap);// вспомогательная переменная
-                            if (3 == list.length && !list[0] && !list[2]) value = list[1];
-                            config[key] = value;
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // оформление строки с другим элементом
-                    if (!("unit" in config)) {// если нет в конфигурации
-                        key = app.lib.strim(value, null, app.val.keyDelim, false, false).toLowerCase();
-                        if ("unit" == key) {// если пройдена основная проверка
-                            value = app.lib.strim(value, app.val.keyDelim, null, false, false);
-                            list = value.split(app.val.argWrap);// вспомогательная переменная
-                            if (3 == list.length && !list[0] && !list[2]) value = list[1];
-                            config[key] = value;
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // поисковой запрос
-                    if (!("search" in config)) {// если нет в конфигурации
-                        key = app.lib.strim(value, null, app.val.keyDelim, false, false).toLowerCase();
-                        if ("search" == key) {// если пройдена основная проверка
-                            value = app.lib.strim(value, app.val.keyDelim, null, false, false);
-                            list = value.split(app.val.argWrap);// вспомогательная переменная
-                            if (3 == list.length && !list[0] && !list[2]) value = list[1];
-                            config[key] = value;
-                            isSetSearch = true;
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // порядковый номер
-                    if (!("index" in config)) {// если нет в конфигурации
-                        key = app.lib.strim(value, null, app.val.keyDelim, false, false).toLowerCase();
-                        if ("index" == key) {// если пройдена основная проверка
-                            value = app.lib.strim(value, app.val.keyDelim, null, false, false);
-                            list = value.split(app.val.argWrap);// вспомогательная переменная
-                            if (3 == list.length && !list[0] && !list[2]) value = list[1];
-                            value = !isNaN(value) ? Number(value) - 1 : -1;
-                            config[key] = value;
-                            isSetIndex = true;
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // идентификатор действия
-                    if (!("action" in config)) {// если нет в конфигурации
-                        key = app.lib.strim(value, null, app.val.keyDelim, false, false).toLowerCase();
-                        if ("action" == key) {// если пройдена основная проверка
-                            value = app.lib.strim(value, app.val.keyDelim, null, false, false);
-                            list = value.split(app.val.argWrap);// вспомогательная переменная
-                            if (3 == list.length && !list[0] && !list[2]) value = list[1];
-                            config[key] = value;
-                            isSetAction = true;
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // проверка доступности удалённого хоста
-                    key = "check";// ключ проверяемого параметра
-                    if (!(key in config)) {// если нет в конфигурации
-                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
-                            config[key] = true;// задаём значение
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // получение данных о пользователе
-                    key = "user";// ключ проверяемого параметра
-                    if (!(key in config)) {// если нет в конфигурации
-                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
-                            config[key] = true;// задаём значение
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // использование цветового оформления
-                    key = "color";// ключ проверяемого параметра
-                    if (!(key in config)) {// если нет в конфигурации
-                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
-                            config[key] = true;// задаём значение
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // повторение заданного действия
-                    key = "repeat";// ключ проверяемого параметра
-                    if (!(key in config)) {// если нет в конфигурации
-                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
-                            config[key] = true;// задаём значение
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // запрет выравнивания списков
-                    key = "noalign";// ключ проверяемого параметра
-                    if (!(key in config)) {// если нет в конфигурации
-                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
-                            config[key] = true;// задаём значение
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // выполнить без ожидания
-                    key = "nowait";// ключ проверяемого параметра
-                    if (!(key in config)) {// если нет в конфигурации
-                        if (!app.lib.compare(key, value, true)) {// если пройдена основная проверка
-                            config[key] = true;// задаём значение
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // режим поиска данных
-                    if (0 == index && !mode) {// если нужно выполнить
-                        if (app.val.putDelim != value) {// если не разделитель потоков
-                            mode = value.toLowerCase();// присваиваем значение
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // контейнер для поиска данных
-                    if (1 == index && !container && mode) {// если нужно выполнить
-                        if (app.val.putDelim != value) {// если не разделитель потоков
-                            container = value;// присваиваем значение
-                            continue;// переходим к следующему параметру
-                        };
-                    };
-                    // если закончились параметры конфигурации
-                    break;// остававливаем получние параметров
-                };
+                app.lib.setParamKeys(config, null, ["check", "user", "color", "repeat"], false, params, delim, wrap, end);
+                app.lib.setParamKeys(config, null, ["noalign", "nowait"], false, params, delim, wrap, end);
+                app.lib.setParamKeys(config, "location", app.fun.convLocationParam, false, params, delim, wrap, end);
+                app.lib.setParamKeys(config, ["index"], app.fun.convIndexParam, false, params, delim, wrap, end);
+                app.lib.setParamKeys(config, ["search", "action", "service"], null, false, params, delim, wrap, end);
+                app.lib.setParamKeys(config, ["item", "unit"], null, false, params, delim, wrap, end);
+                if (!error && params.length && params.shift() != end) error = 1;
             };
-            // вносим поправки для конфигурации
-            if (!error) {// если нет ошибок
-                if (!("item" in config)) config.item = "%NET-HOST%";
-                if (!("unit" in config)) config.unit = "%TMP-KEY%";
+            // получаем фильтрующие параметры
+            if (!error && app.lib.hasValue(config.location)) {// если нужно выполнить
+                app.lib.setParamKeys(filter, [null], null, false, params, delim, wrap, end);
+                if (!error && params.length && params.shift() != end) error = 2;
             };
             // получаем входящие параметры
-            if (!error) {// если нет ошибок
-                isDelim = false;// сбрасываем значение
-                while (index < length && !isDelim && !error) {
-                    value = wsh.arguments.item(index);// получаем значение
-                    if (app.val.putDelim != value) {// если не разделитель потоков
-                        key = app.lib.strim(value, null, app.val.keyDelim, false, false).toLowerCase();
-                        if (key) {// если параметр имеет нужный формат
-                            value = app.lib.strim(value, app.val.keyDelim, null, false, false);
-                            list = value.split(app.val.argWrap);// вспомогательная переменная
-                            if (3 == list.length && !list[0] && !list[2]) value = list[1];
-                            input[key] = value;
-                        } else error = 1;
-                    } else isDelim = true;
-                    index++;
-                };
+            if (!error && app.lib.hasValue(config.location) && app.lib.hasValue(params, end)) {// если нужно выполнить
+                app.lib.setParamKeys(input, [null], app.fun.convNoEmptyParam, false, params, delim, wrap, end);
+                if (!error && params.length && params.shift() != end) error = 3;
             };
             // получаем параметры действий
             if (!error) {// если нет ошибок
-                while (index < length && !error) {
-                    value = wsh.arguments.item(index);// получаем значение
-                    key = app.lib.strim(value, null, app.val.keyDelim, false, false) || value;
-                    if (key) {// если параметр имеет нужный формат
-                        value = app.lib.strim(value, app.val.keyDelim, null, false, false);
-                        list = value.split(app.val.argWrap);// вспомогательная переменная
-                        if (3 == list.length && !list[0] && !list[2]) value = list[1];
-                        value = value.split(app.val.altWrap).join(app.val.argWrap);
-                        action[key] = value;
-                    } else error = 2;
-                    index++;
-                };
+                end = null;// последняя секция
+                app.lib.setParamKeys(action, [null], app.fun.convActionParam, false, params, delim, wrap, end);
+                if (!error && params.length && params.shift() != end) error = 4;
             };
             // получаем поисковой запрос от пользователя
-            if (!error && mode) {// если нужно выполнить
-                if (!isSetSearch) {// если нет в конфигурации
+            if (!error && app.lib.hasValue(config.location)) {// если нужно выполнить
+                isNeedInput = !("search" in config);
+                if (isNeedInput) {// если требуется ввод
                     try {// пробуем получить данные
                         wsh.stdOut.write("Введите поисковой запрос: ");
                         if (config.color) wsh.stdOut.write(app.fun.escape("color", "yellow"));
                         value = wsh.stdIn.readLine();// просим ввести строку
                         if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
-                        value = app.wsh.iconv("cp866", "windows-1251", value);
+                        value = app.wsh.iconv(app.val.dosCharset, app.val.winCharset, value);
                         config.search = value;
                         isFirstLine = false;
                     } catch (e) {// если возникли ошибки
                         try {// пробуем выполнить
                             wsh.stdOut.writeLine();// выводим пустую строчку
                         } catch (e) { };// игнорируем исключения
-                        error = 3;
+                        error = 5;
                     };
                 };
             };
+            // выполняем транслит поискового запроса
+            if (!error) {// если нужно выполнить
+                config.translit = config.search ? app.fun.translit(config.search) : "";
+            };
             // выполняем поиск в указанном режиме
-            switch (mode) {// поддерживаемые режимы
-                case "file":// файл с данными
+            switch (true) {// поддерживаемые режимы
+                case "file" == config.location.scheme && fso.fileExists(config.location.win):// файл
                     // проверяем обязательные параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            (config.unit || !app.lib.count(action)) && config.item
+                            (config.unit || !app.lib.hasValue(action)) && config.item
                         ) {// если проверка пройдена
-                        } else error = 5;
+                        } else error = 7;
                     };
                     // проверяем запрещённые параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
                             (!config.nowait || !config.service)
-                            && (!config.repeat || (isSetAction ? !config.nowait : config.color))
-                            && !app.lib.count(input)
+                            && (!config.repeat || ("action" in config ? !config.nowait : config.color))
+                            && !config.location.user && !config.location.password
+                            && !app.lib.hasValue(input)
                             && !config.user
                         ) {// если проверка пройдена
-                        } else error = 6;
+                        } else error = 8;
                     };
                     // получаем контейнер
                     if (!error) {// если нет ошибок
-                        path = fso.getAbsolutePathName(container);
-                        if (fso.fileExists(path)) {// если контейнер существует
-                            container = fso.getFile(path);
-                        } else error = 7;
+                        container = fso.getFile(config.location.win);
                     };
                     // получаем данные из контейнер
                     if (!error) {// если нет ошибок
                         value = app.wsh.getFileText(container.path);
-                        switch (true) {// поддерживаемые разделители
-                            case app.lib.hasValue(value, app.val.tsvDelim, true): delim = app.val.tsvDelim; break;
-                            case app.lib.hasValue(value, app.val.csvDelim, true): delim = app.val.csvDelim; break;
+                        switch (false) {// поддерживаемые разделители
+                            case !app.lib.hasValue(value, app.val.tsvDelim, true): delim = app.val.tsvDelim; break;
+                            case !app.lib.hasValue(value, app.val.csvDelim, true): delim = app.val.csvDelim; break;
                             default: delim = "";// не определённый разделитель
                         };
                         units = delim ? app.lib.tsv2arr(value, true, delim, false, true) : [];
                     };
+                    // формируем кеш для ускорения поиска
+                    if (!error) {// если нет ошибок
+                        j = 0;// начальное значение
+                        cache = [];// сбрасываем значение
+                        for (var key in filter) {// уровень AND
+                            cache[j] = [];// задаём значение
+                            names = key.split(app.val.argDelim);
+                            value = filter[key];// получаем значение
+                            data = { "search": config.search, "translit": config.translit };
+                            value = app.fun.setDataPattern(value, data, false, true);
+                            for (var k = 0, kLen = names.length; k < kLen; k++) {// уровень OR
+                                name = names[k];// получаем очередное название
+                                wildcard = value;// получаем очередное значение
+                                item = { "name": name, "wildcard": wildcard };
+                                cache[j][k] = item;
+                            };
+                            j++;
+                        };
+                    };
                     // выполняем поиск целевых объектов
                     if (!error) {// если нет ошибок
-                        length = units.length;// получаем длину
-                        for (index = 0; index < length; index++) {
-                            data = units[index];// получаем очередной объект
-                            if (app.fun.checkDataProperty(data, config.search)) {// если найдено совпадение
-                                // добавляем объект в список
-                                if (data["NET-HOST"]) items.push(data);
+                        for (var i = 0, iLen = units.length; i < iLen; i++) {
+                            data = units[i];// получаем очередной объект
+                            // проверяем значение параметров объекта
+                            isFound = data;// начальное значение
+                            for (var j = 0, jLen = cache.length; j < jLen && isFound; j++) {
+                                isMatch = false;// начальное значение
+                                for (var k = 0, kLen = cache[j].length; k < kLen && !isMatch; k++) {
+                                    item = cache[j][k];// получаем очередной элимент
+                                    value = data[item.name];// получаем очередное значение
+                                    isMatch = app.lib.match(value, item.wildcard);
+                                };
+                                isFound = isMatch;
                             };
+                            // добавляем объект в список
+                            if (isFound) items.push(data);
                         };
                     };
                     break;
-                case "folder":// папка с файлами
+                case "file" == config.location.scheme && fso.folderExists(config.location.win):// папка
                     // проверяем обязательные параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            (config.unit || !app.lib.count(action)) && config.item
+                            (config.unit || !app.lib.hasValue(action)) && config.item
                         ) {// если проверка пройдена
-                        } else error = 5;
+                        } else error = 7;
                     };
                     // проверяем запрещённые параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
                             (!config.nowait || !config.service)
-                            && (!config.repeat || (isSetAction ? !config.nowait : config.color))
-                            && !app.lib.count(input)
+                            && (!config.repeat || ("action" in config ? !config.nowait : config.color))
+                            && !config.location.user && !config.location.password
+                            && !app.lib.hasValue(input)
                             && !config.user
                         ) {// если проверка пройдена
-                        } else error = 6;
+                        } else error = 8;
                     };
                     // получаем контейнер
                     if (!error) {// если нет ошибок
-                        path = fso.getAbsolutePathName(container);
-                        if (fso.folderExists(path)) {// если контейнер существует
-                            container = fso.getFolder(path);
-                        } else error = 7;
+                        container = fso.getFolder(config.location.win);
+                    };
+                    // формируем кеш для ускорения поиска
+                    if (!error) {// если нет ошибок
+                        j = 0;// начальное значение
+                        cache = [];// сбрасываем значение
+                        for (var key in filter) {// уровень AND
+                            cache[j] = [];// задаём значение
+                            names = key.split(app.val.argDelim);
+                            value = filter[key];// получаем значение
+                            data = { "search": config.search, "translit": config.translit };
+                            value = app.fun.setDataPattern(value, data, false, true);
+                            for (var k = 0, kLen = names.length; k < kLen; k++) {// уровень OR
+                                name = names[k];// получаем очередное название
+                                wildcard = value;// получаем очередное значение
+                                item = { "name": name, "wildcard": wildcard };
+                                cache[j][k] = item;
+                            };
+                            j++;
+                        };
                     };
                     // выполняем поиск целевых объектов
                     if (!error) {// если нет ошибок
@@ -563,69 +516,123 @@ var search = new App({
                             file = files.item();// получаем очередной элемент коллекции
                             files.moveNext();// переходим к следующему элементу
                             value = app.wsh.getFileText(file.path);
-                            switch (true) {// поддерживаемые разделители
-                                case app.lib.hasValue(value, app.val.keyDelim, true): delim = app.val.keyDelim; break;
+                            switch (false) {// поддерживаемые разделители
+                                case !app.lib.hasValue(value, app.val.keyDelim, true): delim = app.val.keyDelim; break;
                                 default: delim = "";// не определённый разделитель
                             };
                             data = delim ? app.lib.ini2obj(value, false) : null;
-                            if (app.fun.checkDataProperty(data, config.search)) {// если найдено совпадение
-                                // добавляем объект в список
-                                if (data["NET-HOST"]) items.push(data);
+                            // проверяем значение параметров объекта
+                            isFound = data;// начальное значение
+                            for (var j = 0, jLen = cache.length; j < jLen && isFound; j++) {
+                                isMatch = false;// начальное значение
+                                for (var k = 0, kLen = cache[j].length; k < kLen && !isMatch; k++) {
+                                    item = cache[j][k];// получаем очередной элимент
+                                    value = data[item.name];// получаем очередное значение
+                                    isMatch = app.lib.match(value, item.wildcard);
+                                };
+                                isFound = isMatch;
                             };
+                            // добавляем объект в список
+                            if (isFound) items.push(data);
                         };
                     };
                     break;
-                case "ldap":// домен
+                case "ldap" == config.location.scheme:// домен
                     // проверяем обязательные параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            (config.unit || !app.lib.count(action)) && config.item
-                            && (!container || app.lib.validate(container, "guid"))
+                            (config.unit || !app.lib.hasValue(action)) && config.item
                         ) {// если проверка пройдена
-                        } else error = 5;
+                        } else error = 7;
                     };
                     // проверяем запрещённые параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
                             (!config.nowait || !config.service)
-                            && (!config.repeat || (isSetAction ? !config.nowait : config.color))
+                            && (!config.repeat || ("action" in config ? !config.nowait : config.color))
+                            && !(config.location.nix && config.location.domain)
+                            && !config.location.user && !config.location.password
                         ) {// если проверка пройдена
-                        } else error = 6;
+                            if (!config.location.nix) config.location.nix = config.location.domain;
+                        } else error = 8;
                     };
                     // получаем контейнер
                     if (!error) {// если нет ошибок
-                        container = app.wsh.getLDAP(container)[0];
+                        container = app.wsh.ldap(config.location.nix)[0];
                         if (container) {// если контейнер существует
-                        } else error = 7;
+                        } else error = 9;
                     };
-                    // выполняем поиск объектов
+                    // формируем кеш для ускорения поиска
                     if (!error) {// если нет ошибок
-                        units = app.wsh.getLDAP(
-                            "WHERE objectClass = 'Computer'" +
-                            (config.search ? " AND (" +
-                                "name = '*" + config.search + "*'" +
-                                " OR description = '*" + config.search + "*'" +
-                                " OR operatingSystemVersion = '*" + config.search + "*'" +
-                                " OR description = '*" + app.fun.translit(config.search) + "*'" +
-                                ")" : ""),
+                        j = 0;// начальное значение
+                        cache = [];// сбрасываем значение
+                        map = {};// мепинг значений и distinguished name
+                        for (var key in filter) {// пробигаемся по фильтрам
+                            cache[j] = [];// задаём значение
+                            names = key.split(app.val.argDelim);
+                            value = filter[key];// получаем значение
+                            data = { "search": config.search, "translit": config.translit };
+                            value = app.fun.setDataPattern(value, data, false, true);
+                            for (var k = 0, kLen = names.length; k < kLen; k++) {
+                                name = names[k];// получаем очередное название
+                                query = app.lib.wcd2wql(value, name, function (value, name) {
+                                    if (value && app.lib.hasValue(["manager", "managedBy", "member", "memberOf"], name, false)) {
+                                        if (!(value in map)) {// если поиск идентификатора ещё не выполнялся
+                                            item = app.wsh.ldap(value, container)[0];
+                                            dn = item ? app.fun.getItemAttribute(item, "distinguishedName") : null;
+                                            map[value] = dn;// сохраняем идентификатор что бы не искать в дальнейшем
+                                        };
+                                        value = map[value];
+                                    };
+                                    return value ? [value] : [];
+                                });
+                                item = { "query": query };
+                                cache[j][k] = item;
+                            };
+                            j++;
+                        };
+                    };
+                    // выполняем поиск целевых объектов
+                    if (!error) {// если нет ошибок
+                        fragments = [];// сбрасываем значение
+                        for (var j = 0, jLen = cache.length; j < jLen; j++) {
+                            fragments[j] = [];// сбрасываем значение
+                            for (var k = 0, kLen = cache[j].length; k < kLen && !isMatch; k++) {
+                                item = cache[j][k];// получаем очередной элимент
+                                fragment = item.query;
+                                fragments[j][k] = fragment;
+                            };
+                            fragment = fragments[j].join(" OR ");
+                            if (kLen > 1) fragment = "(" + fragment + ")";
+                            fragments[j] = fragment;
+                        };
+                        fragment = fragments.join(" AND ");
+                        units = app.wsh.ldap(
+                            fragment ? "WHERE " + fragment : "",
                             container
                         );
                     };
                     // выполняем получение данных по целевым объектам
                     if (!error) {// если нет ошибок
                         length = units.length;// получаем длину
-                        for (index = 0; index < length; index++) {
-                            item = units[index];// получаем очередной объект
+                        for (var i = 0, iLen = units.length; i < iLen; i++) {
+                            item = units[i];// получаем очередной объект
                             data = {};// сбрасываем значение
                             // работаем с объектом
-                            if (value = app.fun.getItemProperty(item, "cn")) data["NET-HOST"] = value;
-                            if (value = app.fun.getItemProperty(item, "distinguishedName")) data["NET-HOST-DN"] = value;
-                            if (value = app.fun.getItemProperty(item, "operatingSystem")) data["SYS-NAME"] = value;
-                            if (value = app.fun.getItemProperty(item, "operatingSystemVersion").replace(" (", ".").replace(")", "")) data["SYS-VERSION"] = value;
-                            for (var key in input) data = app.lib.extend(data, app.fun.getDataPattern(input[key], app.fun.getItemProperty(item, key), false));
+                            map = {// мепинг аттрибутов
+                                cn: "NET-HOST"
+                            };
+                            for (var key in map) {// пробегаемся по мепингу аттрибутов
+                                name = map[key];// получаем имя
+                                if (value = app.fun.getItemAttribute(item, key)) data[name] = value;
+                            };
+                            for (var key in input) {// пробегаемся входящим параметрам
+                                data = app.lib.extend(data, app.fun.getDataPattern(input[key], app.fun.getItemAttribute(item, key), false));
+                                name = "SYS-VERSION"; if (value = data[name]) if (value = value.replace(" (", ".").replace(")", "")) data[name] = value;
+                            };
                             // получаем данные о пользователе
                             if (config.user && data["USR-NAME-FIRST"] && data["USR-NAME-SECOND"]) {// если нужно дозапросить данные
-                                users = app.wsh.getLDAP(
+                                users = app.wsh.ldap(
                                     "WHERE objectClass = 'User'" +
                                     " AND sn = '" + data["USR-NAME-FIRST"] + "'" +
                                     " AND givenName = '" + data["USR-NAME-SECOND"] + "'",
@@ -634,59 +641,65 @@ var search = new App({
                                 if (users.length) {// если удалось получить данные
                                     item = users[0];// получаем очередной объект
                                     // работаем с пользователем
-                                    if (value = app.fun.getItemProperty(item, "co")) data["USR-COUNTRY"] = value;
-                                    if (value = app.fun.getItemProperty(item, "c")) data["USR-COUNTRY-ID"] = value;
-                                    if (value = app.fun.getItemProperty(item, "company")) data["USR-COMPANY"] = value;
-                                    if (value = app.fun.getItemProperty(item, "displayName")) data["USR-NAME"] = value;
-                                    if (value = app.fun.getItemProperty(item, "department")) data["USR-DEPARTMENT"] = value;
-                                    if (value = app.fun.getItemProperty(item, "homeDirectory")) data["USR-HOME"] = value;
-                                    if (value = app.fun.getItemProperty(item, "l")) data["USR-CITY"] = value;
-                                    if (value = app.fun.getItemProperty(item, "mail")) data["USR-EMAIL"] = value;
-                                    if (value = app.fun.getItemProperty(item, "mobile")) data["USR-MOBILE"] = value;
-                                    if (value = app.fun.getItemProperty(item, "objectSid")) data["USR-SID"] = value;
-                                    if (value = app.fun.getItemProperty(item, "sAMAccountName")) data["USR-LOGIN"] = value;
-                                    if (value = app.fun.getItemProperty(item, "distinguishedName")) data["USR-ACCOUNT-DN"] = value;
-                                    if (value = app.fun.getItemProperty(item, "telephoneNumber")) data["USR-PHONE"] = value;
-                                    if (value = app.fun.getItemProperty(item, "title")) data["USR-POSITION"] = value;
-                                    if (value = app.fun.getItemProperty(item, "info")) data["USR-INFO"] = value;
+                                    map = {// мепинг аттрибутов
+                                        co: "USR-COUNTRY",
+                                        c: "USR-COUNTRY-ID",
+                                        company: "USR-COMPANY",
+                                        displayName: "USR-NAME",
+                                        department: "USR-DEPARTMENT",
+                                        homeDirectory: "USR-HOME",
+                                        l: "USR-CITY",
+                                        mail: "USR-EMAIL",
+                                        mobile: "USR-MOBILE",
+                                        objectSid: "USR-SID",
+                                        sAMAccountName: "USR-LOGIN",
+                                        distinguishedName: "USR-ACCOUNT-DN",
+                                        telephoneNumber: "USR-PHONE",
+                                        title: "USR-POSITION",
+                                        info: "USR-INFO"
+                                    };
+                                    for (var key in map) {// пробегаемся по мепингу аттрибутов
+                                        name = map[key];// получаем имя
+                                        if (value = app.fun.getItemAttribute(item, key)) data[name] = value;
+                                    };
                                 };
                             };
                             // добавляем объект в список
-                            if (data["NET-HOST"]) items.push(data);
+                            items.push(data);
                         };
                     };
                     break;
                 default:// не поддерживаемый режим
                     // обрабатываем не поддерживаемый режим
                     if (!error) {// если нет ошибок
-                        if (!mode) {// если не задан режим
-                        } else error = 4;
+                        if (!config.location.scheme) {// если не задан режим
+                        } else error = 6;
                     };
                     // проверяем обязательные параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            app.lib.count(action, true) && config.unit
+                            app.lib.hasValue(action, true) && config.unit
                         ) {// если проверка пройдена
-                        } else error = 5;
+                        } else error = 7;
                     };
                     // проверяем запрещённые параметры
                     if (!error) {// если нет ошибок
                         if (// множественное условие
-                            !app.lib.count(input)
-                            && (!config.repeat || (isSetAction ? !config.nowait : config.color))
-                            && !isSetSearch
-                            && !isSetIndex
+                            !app.lib.hasValue(input)
+                            && (!config.repeat || ("action" in config ? !config.nowait : config.color))
+                            && !("search" in config)
+                            && !("index" in config)
                             && !config.service
                             && !config.check
                             && !config.user
                         ) {// если проверка пройдена
-                        } else error = 6;
+                        } else error = 8;
                     };
             };
             // проверяем список целевых объектов
-            if (!error && mode) {// если нужно выполнить
+            if (!error && config.location.scheme) {// если нужно выполнить
                 if (items.length) {// если список не пуст
-                } else error = 8;
+                } else error = 10;
             };
             // работаем в зависимости от наличия целевых объектов
             if (items.length) {// если список целевых объектов не пуст
@@ -697,20 +710,19 @@ var search = new App({
                         try {// пробуем подключиться к компьютеру используя флаг wbemConnectFlagUseMaxWait
                             local = locator.connectServer(".", "root\\CIMV2", null, null, null, null, 0x80);
                         } catch (e) {// если возникли ошибки
-                            error = 9;
+                            error = 11;
                         };
                     };
                     // проверяем на доступность целевые объекты
                     if (!error) {// если нет ошибок
-                        length = items.length;// получаем длину
-                        for (index = 0; index < length; index++) {
-                            data = items[index];// получаем очередной объект
+                        for (var i = 0, iLen = items.length; i < iLen; i++) {
+                            data = items[i];// получаем очередной объект
                             // выполняем запрос
                             response = local.execQuery(
                                 "SELECT responseTime, statusCode" +
                                 " FROM Win32_PingStatus" +
                                 " WHERE address = '" + data["NET-HOST"] + "'" +
-                                " AND timeout = 600"
+                                " AND timeout = 999"
                             );
                             // обрабатываем ответ
                             response = new Enumerator(response);
@@ -728,127 +740,48 @@ var search = new App({
                 // выполняем подсчёт значений
                 if (!error) {// если нет ошибок
                     count = {};// сбрасываем значение
-                    length = items.length;// получаем длину
-                    for (index = 0; index < length; index++) {
-                        data = items[index];// получаем очередной объект
-                        data["TMP-INDEX"] = app.lib.strPad(index + 1, ("" + length).length, "0", "left");
-                        if (!config.noalign) for (var key in data) count[key] = Math.max(data[key].length, count[key] || 0);
+                    for (var i = 0, iLen = items.length; i < iLen; i++) {
+                        data = items[i];// получаем очередной объект
+                        name = "TMP-INDEX"; data[name] = app.lib.strPad(i + 1, ("" + iLen).length, "0", "left");
+                        data = app.lib.clone(data);// колонируем для изменений
+                        for (var name in data) if (name.substring(name.length - app.val.hideEnd.length).toUpperCase() === app.val.hideEnd) data[name] = app.val.hideValue;
+                        if (!config.noalign) for (var name in data) count[name] = Math.max(data[name].length, count[name] || 0);
                     };
                 };
                 // выыодим список целевых объектов
                 if (!error) {// если нет ошибок
-                    length = items.length;// получаем длину
                     if (!isFirstLine) wsh.stdOut.writeLine();// выводим пустую строчку
-                    for (index = 0; index < length; index++) {
-                        data = items[index];// получаем очередной объект
+                    for (var i = 0, iLen = items.length; i < iLen; i++) {
+                        data = items[i];// получаем очередной объект
                         data = app.lib.clone(data);// колонируем для изменений
-                        if (!config.noalign) for (var key in count) data[key] = app.lib.strPad(data[key] || "", count[key], " ", isNaN(app.lib.trim(data[key]).charAt(0)) ? "right" : "left");
-                        if (value = data["TMP-INDEX"]) data["TMP-INDEX"] = app.fun.escape("color", config.color && "yellow", value, true);
-                        if (value = data["NET-HOST"]) data["NET-HOST"] = app.fun.escape("color", config.color && "cyan", value, true);
-                        value = app.fun.setDataPattern(config.item, data, false);
+                        for (var name in data) if (name.substring(name.length - app.val.hideEnd.length).toUpperCase() === app.val.hideEnd) data[name] = app.val.hideValue;
+                        if (!config.noalign) for (var name in count) data[name] = app.lib.strPad(data[name] || "", count[name], app.val.spсDelim, isNaN(app.lib.trim(data[name]).charAt(0)) ? "right" : "left");
+                        name = "TMP-INDEX"; if (value = data[name]) data[name] = app.fun.escape("color", config.color && "yellow", value, true);
+                        name = "NET-HOST"; if (value = data[name]) data[name] = app.fun.escape("color", config.color && "cyan", value, true);
+                        value = app.fun.setDataPattern(config.item, data, false, true);
                         wsh.stdOut.writeLine(value);
                     };
-                    if (app.lib.count(action, true)) wsh.stdOut.writeLine();// выводим пустую строчку
+                    if (app.lib.hasValue(action, true)) wsh.stdOut.writeLine();// выводим пустую строчку
                     isFirstLine = true;
                 };
             };
             // работаем в зависимости от наличия действий
             item = null;// сбрасываем информацию об целевом объекте
-            if (app.lib.count(action, true)) {// если список действий не пуст
+            if (app.lib.hasValue(action, true)) {// если список действий не пуст
                 // работаем в зависимости от наличия целевых объектов
                 if (items.length) {// если список целевых объектов не пуст
                     // получаем номер объекта от пользователя
                     if (!error) {// если нет ошибок
-                        if (!isSetIndex) {// если нет в конфигурации
+                        isNeedInput = !("index" in config);
+                        if (isNeedInput) {// если требуется ввод
                             try {// пробуем получить данные
                                 wsh.stdOut.write("Введите номер объекта: ");
                                 if (config.color) wsh.stdOut.write(app.fun.escape("color", "yellow"));
                                 value = wsh.stdIn.readLine();// просим ввести строку
                                 if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
-                                value = app.wsh.iconv("cp866", "windows-1251", value);
-                                value = !isNaN(value) ? Number(value) - 1 : -1;
+                                value = app.wsh.iconv(app.val.dosCharset, app.val.winCharset, value);
+                                value = app.fun.convIndexParam(value)[0];
                                 config.index = value;
-                                isFirstLine = false;
-                            } catch (e) {// если возникли ошибки
-                                try {// пробуем выполнить
-                                    wsh.stdOut.writeLine();// выводим пустую строчку
-                                } catch (e) { };// игнорируем исключения
-                                error = 10;
-                            };
-                        };
-                    };
-                    // получаем целевой объект по порядковому номеру
-                    if (!error) {// если нет ошибок
-                        item = items[config.index];
-                        if (item) {// если объект получен
-                        } else error = 11;
-                    };
-                    // добавляем переменные во временное окружение
-                    if (!error) {// если нет ошибок
-                        data = item;// получаем данные
-                        items = shell.environment(app.val.envType);
-                        for (var key in data) {// пробигаемся по списку с данными
-                            value = data[key];// получаем очередное значение
-                            setEnv(items, key, value);
-                        };
-                    };
-                };
-                // выполняем подсчёт значений
-                if (!error) {// если нет ошибок
-                    units = [];// сбрасываем значение
-                    count = {};// сбрасываем значение
-                    index = 0;// сбрасываем значение
-                    length = app.lib.count(action, true);
-                    for (var key in action) {// пробигаемся по действиям
-                        value = action[key];// получаем очередное значение
-                        isDelim = !value;// этот элимент является разделителем
-                        data = {};// сбрасываем значение
-                        data["TMP-KEY"] = key;
-                        if (!isDelim) {// если это не разделитель
-                            data["TMP-VALUE"] = shell.expandEnvironmentStrings(value);
-                            data["TMP-INDEX"] = app.lib.strPad(index + 1, ("" + length).length, "0", "left");
-                            if (!config.noalign) for (var key in data) count[key] = Math.max(data[key].length, count[key] || 0);
-                            index++;
-                        };
-                        units.push(data);
-                    };
-                };
-                // выыодим список доступных действий
-                if (!error) {// если нет ошибок
-                    length = units.length;// получаем длину
-                    if (!isFirstLine) wsh.stdOut.writeLine();// выводим пустую строчку
-                    for (index = 0; index < length; index++) {
-                        data = units[index];// получаем очередной объект
-                        data = app.lib.clone(data);// колонируем для изменений
-                        isDelim = !data["TMP-INDEX"];// этот элимент является разделителем
-                        if (!config.noalign) for (var key in count) data[key] = app.lib.strPad(data[key] || "", count[key], " ", isNaN(app.lib.trim(data[key]).charAt(0)) ? "right" : "left");
-                        if (value = data["TMP-VALUE"]) data["TMP-VALUE"] = app.fun.escape("color", config.color && "cyan", value, true);
-                        if (value = data["TMP-INDEX"]) data["TMP-INDEX"] = app.fun.escape("color", config.color && "yellow", value, true);
-                        if (value = data["TMP-KEY"]) if (isDelim) data["TMP-KEY"] = app.fun.escape("color", config.color && "yellow", value, true);
-                        value = app.fun.setDataPattern(isDelim ? app.fun.clearPattern(config.unit) : config.unit, data, false);
-                        wsh.stdOut.writeLine(value);
-                    };
-                    if (!isSetAction) wsh.stdOut.writeLine();// выводим пустую строчку
-                    if (!isSetAction && config.color) wsh.stdOut.writeLine();// выводим пустую строчку
-                    isFirstLine = true;
-                };
-                // работаем с действием в цикле
-                do {// выполняем циклические операции
-                    // получаем номер действия от пользователя
-                    if (!error) {// если нет ошибок
-                        if (!isSetAction) {// если нет в конфигурации
-                            try {// пробуем получить данные
-                                index = 0;// сбрасываем значение
-                                config.action = null;// сбрасываем значение
-                                if (config.color) wsh.stdOut.write(app.fun.escape("cursor", "up", null, true));
-                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
-                                wsh.stdOut.write("Введите номер действия: ");
-                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "yellow"));
-                                value = wsh.stdIn.readLine();// просим ввести строку
-                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
-                                value = app.wsh.iconv("cp866", "windows-1251", value);
-                                value = !isNaN(value) ? Number(value) - 1 : -1;
-                                for (var key in action) if (action[key]) if (value == index++) config.action = key;
                                 isFirstLine = false;
                             } catch (e) {// если возникли ошибки
                                 try {// пробуем выполнить
@@ -858,17 +791,108 @@ var search = new App({
                             };
                         };
                     };
+                    // получаем целевой объект по порядковому номеру
+                    if (!error) {// если нет ошибок
+                        item = items[config.index];
+                        if (item) {// если объект получен
+                        } else error = 13;
+                    };
+                    // добавляем переменные во временное окружение
+                    if (!error) {// если нет ошибок
+                        data = item;// получаем данные
+                        items = shell.environment(app.val.envType);
+                        for (var name in data) {// пробигаемся по списку с данными
+                            value = data[name];// получаем очередное значение
+                            setEnv(items, name, value);
+                        };
+                    };
+                };
+                // выполняем подсчёт значений
+                if (!error) {// если нет ошибок
+                    units = [];// сбрасываем значение
+                    count = {};// сбрасываем значение
+                    i = 0; iLen = app.lib.hasValue(action, true);
+                    for (var key in action) {// пробигаемся по действиям
+                        value = action[key];// получаем очередное значение
+                        isDelim = !value;// этот элимент является разделителем
+                        // поправка для скрытых значений в команде
+                        if (!isDelim) {// если это не разделитель
+                            command = shell.expandEnvironmentStrings(value);
+                            data = app.fun.getDataPattern(value, command, false);
+                            for (var name in data) if (name.substring(name.length - app.val.hideEnd.length).toUpperCase() === app.val.hideEnd) data[name] = app.val.hideValue;
+                            command = app.fun.setDataPattern(value, data, false, false);
+                        };
+                        // формируем данные
+                        data = {};// сбрасываем значение
+                        name = "TMP-KEY"; data[name] = key;
+                        if (!isDelim) {// если это не разделитель
+                            name = "TMP-VALUE"; data[name] = command;
+                            name = "TMP-INDEX"; data[name] = app.lib.strPad(i + 1, ("" + iLen).length, "0", "left");
+                            if (!config.noalign) for (var name in data) count[name] = Math.max(data[name].length, count[name] || 0);
+                            i++;
+                        };
+                        units.push(data);
+                    };
+                };
+                // выыодим список доступных действий
+                if (!error) {// если нет ошибок
+                    if (!isFirstLine) wsh.stdOut.writeLine();// выводим пустую строчку
+                    for (var i = 0, iLen = units.length; i < iLen; i++) {
+                        data = units[i];// получаем очередной объект
+                        data = app.lib.clone(data);// колонируем для изменений
+                        name = "TMP-INDEX"; value = data[name]; isDelim = !value;// этот элимент является разделителем
+                        if (!config.noalign) for (var name in count) data[name] = app.lib.strPad(data[name] || "", count[name], app.val.spсDelim, isNaN(app.lib.trim(data[name]).charAt(0)) ? "right" : "left");
+                        name = "TMP-INDEX"; if (value = data[name]) data[name] = app.fun.escape("color", config.color && "yellow", value, true);
+                        name = "TMP-VALUE"; if (value = data[name]) data[name] = app.fun.escape("color", config.color && "cyan", value, true);
+                        name = "TMP-KEY"; if (value = data[name]) if (isDelim) data[name] = app.fun.escape("color", config.color && "yellow", value, true);
+                        value = app.fun.setDataPattern(isDelim ? app.fun.clearDelimPattern(config.unit) : config.unit, data, false, true);
+                        wsh.stdOut.writeLine(value);
+                    };
+                    if (!("action" in config)) wsh.stdOut.writeLine();// выводим пустую строчку
+                    if (!("action" in config) && config.color) wsh.stdOut.writeLine();// выводим пустую строчку
+                    isFirstLine = true;
+                };
+                // задаём служебные флаги
+                if (!error) {// если нет ошибок
+                    isNeedInput = !("action" in config);
+                };
+                // работаем с действием в цикле
+                do {// выполняем циклические операции
+                    // получаем номер действия от пользователя
+                    if (!error) {// если нет ошибок
+                        if (isNeedInput) {// если требуется ввод
+                            try {// пробуем получить данные
+                                i = 0;// начальное значение
+                                config.action = null;// сбрасываем значение
+                                if (config.color) wsh.stdOut.write(app.fun.escape("cursor", "up", null, true));
+                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
+                                wsh.stdOut.write("Введите номер действия: ");
+                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "yellow"));
+                                value = wsh.stdIn.readLine();// просим ввести строку
+                                if (config.color) wsh.stdOut.write(app.fun.escape("color", "default"));
+                                value = app.wsh.iconv(app.val.dosCharset, app.val.winCharset, value);
+                                value = app.fun.convIndexParam(value)[0];
+                                for (var key in action) if (action[key]) if (value == i++) config.action = key;
+                                isFirstLine = false;
+                            } catch (e) {// если возникли ошибки
+                                try {// пробуем выполнить
+                                    wsh.stdOut.writeLine();// выводим пустую строчку
+                                } catch (e) { };// игнорируем исключения
+                                error = 14;
+                            };
+                        };
+                    };
                     // получаем команду целевого действия
                     if (!error) {// если нет ошибок
                         if (config.action in action) {// если действие существует
                             value = action[config.action];
                             command = shell.expandEnvironmentStrings(value);
-                        } else error = 13;
+                        } else error = 15;
                     };
                     // проверяем команду целевого действия
                     if (!error) {// если нет ошибок
                         if (command) {// если не пустая команда
-                        } else error = 14;
+                        } else error = 16;
                     };
                     // подключаемся к удалённому хосту
                     if (!error && config.service) {// если нужно выполнить
@@ -876,7 +900,7 @@ var search = new App({
                         try {// пробуем подключиться к компьютеру используя флаг wbemConnectFlagUseMaxWait
                             remote = locator.connectServer(data["NET-HOST"], "root\\CIMV2", null, null, null, null, 0x80);
                         } catch (e) {// если возникли ошибки
-                            error = 15;
+                            error = 17;
                         };
                     };
                     // запускаем службу на удалённом хосте
@@ -884,9 +908,9 @@ var search = new App({
                         try {// пробуем выполнить на компьютере
                             service = remote.get("Win32_Service.Name='" + config.service + "'");
                             if (service.started || !service.startService()) {// если удалось запустить службу
-                            } else error = 17;
+                            } else error = 19;
                         } catch (e) {// если возникли ошибки
-                            error = 16;
+                            error = 18;
                         };
                     };
                     // выполняем команду на локальном хосте
@@ -894,7 +918,7 @@ var search = new App({
                         try {// пробуем выполнить комманду
                             shell.run(command, 1, !config.nowait);
                         } catch (e) {// если возникли ошибки
-                            error = 18;
+                            error = 20;
                         };
                     };
                     // останавливаем службу на удалённом хосте
@@ -902,9 +926,9 @@ var search = new App({
                         try {// пробуем выполнить на компьютере
                             service = remote.get("Win32_Service.Name='" + config.service + "'");
                             if (!service.started || !service.stopService()) {// если удалось остановить службу
-                            } else error = 19;
+                            } else error = 21;
                         } catch (e) {// если возникли ошибки
-                            error = 16;
+                            error = 18;
                         };
                     };
                 } while (!error && config.repeat);
@@ -912,25 +936,27 @@ var search = new App({
             // выводим информацию об ошибке
             if (error) {// если есть ошибка
                 value = {// список ошибок
-                    1: "У входящего параметра отсутствует значение.",
-                    2: "Задано пустое значение в параметре с действием.",
-                    3: "Не удалось инициировать получение поискового запроса.",
-                    4: "Указан не поддерживаемый режим.",
-                    5: "Обязательные параметры не прошли проверку или отсутствуют.",
-                    6: "Задана не допустимая комбинация параметров.",
-                    7: "Не удалось получить контейнер для поиска данных.",
-                    8: "Не удалось найти подходящие объекты.",
-                    9: "Не удалось подключиться к локальному компьютеру.",
-                    10: "Не удалось инициировать получение номера объекта.",
-                    11: "Отсутствует объект с указанным номером.",
-                    12: "Не удалось инициировать получение номера действия.",
-                    13: "Отсутствует указанное действие.",
-                    14: "Сформирована пустая команды для действия.",
-                    15: "Не удалось подключиться к удалённому компьютеру.",
-                    16: "Не удалось найти указанную службу на удалённому компьютеру.",
-                    17: "Не удалось запустить службу на удалённом компьютере.",
-                    18: "Не удалось выполнить комманду указанного действия.",
-                    19: "Не удалось остановить службу на удалённом компьютере."
+                    1: "Указан не известный конфигурационный параметр.",
+                    2: "Не задан ключ для фильтрующего параметра.",
+                    3: "Не задан ключ или задано пустое значение для входящего параметра.",
+                    4: "Не верно указан параметр действиея.",
+                    5: "Не удалось инициировать получение поискового запроса.",
+                    6: "Задан несуществующий или неподдерживаемый источник данных.",
+                    7: "Обязательные параметры не прошли проверку или отсутствуют.",
+                    8: "Задана не допустимая комбинация параметров.",
+                    9: "Не удалось подключиться или открыть источник данных.",
+                    10: "Не удалось найти подходящие объекты.",
+                    11: "Не удалось подключиться к локальному компьютеру.",
+                    12: "Не удалось инициировать получение номера объекта.",
+                    13: "Отсутствует объект с указанным номером.",
+                    14: "Не удалось инициировать получение номера действия.",
+                    15: "Отсутствует указанное действие.",
+                    16: "Сформирована пустая команды для действия.",
+                    17: "Не удалось подключиться к удалённому компьютеру.",
+                    18: "Не удалось найти указанную службу на удалённому компьютеру.",
+                    19: "Не удалось запустить службу на удалённом компьютере.",
+                    20: "Не удалось выполнить комманду указанного действия.",
+                    21: "Не удалось остановить службу на удалённом компьютере."
                 }[error];
                 if (value) {// если есть сообщение
                     value = app.fun.escape("color", config.color && "red", value, true);
