@@ -1,4 +1,4 @@
-/* 2.0.0 ищет данне для переменных среды
+/* 2.0.1 ищет данне для переменных среды
 
 cscript env.search.min.js [location] [<config>...] [\\ <filter>...] [\\ <input>...] [\\ <action>...]
 
@@ -345,28 +345,28 @@ var search = new App({
             delim = app.val.keyDelim; wrap = app.val.argWrap; end = app.val.putDelim;
             // получаем конфигурационные параметры
             if (!error) {// если нет ошибок
-                app.lib.setParamKeys(config, null, ["check", "user", "color", "repeat"], false, params, delim, wrap, end);
-                app.lib.setParamKeys(config, null, ["noalign", "nowait"], false, params, delim, wrap, end);
-                app.lib.setParamKeys(config, "location", app.fun.convLocationParam, false, params, delim, wrap, end);
-                app.lib.setParamKeys(config, ["index"], app.fun.convIndexParam, false, params, delim, wrap, end);
-                app.lib.setParamKeys(config, ["search", "action", "service"], null, false, params, delim, wrap, end);
-                app.lib.setParamKeys(config, ["item", "unit"], null, false, params, delim, wrap, end);
+                if (!error) app.lib.setParamKeys(config, null, ["check", "user", "color", "repeat"], false, params, delim, wrap, end);
+                if (!error) app.lib.setParamKeys(config, null, ["noalign", "nowait"], false, params, delim, wrap, end);
+                if (!error) app.lib.setParamKeys(config, "location", app.fun.convLocationParam, false, params, delim, wrap, end);
+                if (!error) app.lib.setParamKeys(config, ["index"], app.fun.convIndexParam, false, params, delim, wrap, end);
+                if (!error) app.lib.setParamKeys(config, ["search", "action", "service"], null, false, params, delim, wrap, end);
+                if (!error) app.lib.setParamKeys(config, ["item", "unit"], null, false, params, delim, wrap, end);
                 if (!error && params.length && params.shift() != end) error = 1;
             };
             // получаем фильтрующие параметры
             if (!error && app.lib.hasValue(config.location)) {// если нужно выполнить
-                app.lib.setParamKeys(filter, [null], null, false, params, delim, wrap, end);
+                if (!error) app.lib.setParamKeys(filter, [null], null, false, params, delim, wrap, end);
                 if (!error && params.length && params.shift() != end) error = 2;
             };
             // получаем входящие параметры
             if (!error && app.lib.hasValue(config.location) && app.lib.hasValue(params, end)) {// если нужно выполнить
-                app.lib.setParamKeys(input, [null], app.fun.convNoEmptyParam, false, params, delim, wrap, end);
+                if (!error) app.lib.setParamKeys(input, [null], app.fun.convNoEmptyParam, false, params, delim, wrap, end);
                 if (!error && params.length && params.shift() != end) error = 3;
             };
             // получаем параметры действий
             if (!error) {// если нет ошибок
                 end = null;// последняя секция
-                app.lib.setParamKeys(action, [null], app.fun.convActionParam, false, params, delim, wrap, end);
+                if (!error) app.lib.setParamKeys(action, [null], app.fun.convActionParam, false, params, delim, wrap, end);
                 if (!error && params.length && params.shift() != end) error = 4;
             };
             // получаем поисковой запрос от пользователя
@@ -390,7 +390,7 @@ var search = new App({
                 };
             };
             // выполняем транслит поискового запроса
-            if (!error) {// если нужно выполнить
+            if (!error) {// если нет ошибок
                 config.translit = config.search ? app.fun.translit(config.search) : "";
             };
             // выполняем поиск в указанном режиме
